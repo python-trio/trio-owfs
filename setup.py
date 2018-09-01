@@ -18,16 +18,13 @@ setup(
         "trio",
     ],
     keywords=[
-        # COOKIECUTTER-TRIO-TODO: add some keywords
-        # "async", "io", "networking", ...
+        "trio", "async", "io", "networking",
     ],
     python_requires=">=3.6",
     classifiers=[
         "License :: OSI Approved :: MIT License",
         "License :: OSI Approved :: Apache Software License",
         "Framework :: Trio",
-        # COOKIECUTTER-TRIO-TODO: Remove any of these classifiers that don't
-        # apply:
         "Operating System :: POSIX :: Linux",
         "Operating System :: MacOS :: MacOS X",
         "Operating System :: Microsoft :: Windows",
@@ -35,13 +32,5 @@ setup(
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Framework :: Trio",
-        # COOKIECUTTER-TRIO-TODO: Consider adding trove classifiers for:
-        #
-        # - Development Status
-        # - Intended Audience
-        # - Topic
-        #
-        # For the full list of options, see:
-        #   https://pypi.org/classifiers/
     ],
 )
