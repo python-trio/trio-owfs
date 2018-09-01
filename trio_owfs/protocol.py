@@ -53,10 +53,6 @@ class Message:
         self.rlen = rlen
         self.event = ValueEvent()
         
-    def msgReceived(self,*a,**k):
-        self.close()
-        raise NotImplementedError("You need to override OWFSassembler.msgReceived")
-
     async def write(self, stream):
         """Send an OWFS message to the other end of the connection.
         """
@@ -67,8 +63,9 @@ class Message:
         flags |= OWFlag.uncached
         # flags |= 1<<8 ## ?
         flags |= OWtempformat.celsius << OWtempformat._offset
-        flags |= OWdevformat.fdi << OWdevformat._offset
+        flags |= OWdevformat.fdidc << OWdevformat._offset
 
+        print("SEND",0,len(self.data), self.typ, flags, self.rlen, 0, self.data)
         await stream.send_all(struct.pack("!6i",
             0, len(self.data), self.typ, flags, self.rlen, 0) + self.data)
     
@@ -90,13 +87,13 @@ class Message:
     def done(self):
         return self.event.is_set
 
-def _path(self,path):
+def _path(path):
     """Helper to build an OWFS path from a list"""
     if path:
         path = '/'+'/'.join(str(x) for x in path)
     else:
         path = ""
-    return path
+    return path.encode('utf-8')+b'\0'
 
 class NOPMsg(Message):
     def __init__(self):
@@ -107,7 +104,7 @@ class AttrGetMsg(Message):
     def __init__(self,path):
         assert path is not None
         self.path = path
-        super().__init__(OWMsg.read,self._path(self.path).encode('utf-8')+b'\0',8192)
+        super().__init__(OWMsg.read,_path(self.path),8192)
         
 class AttrSetMsg(Message):
     """write an OWFS value"""
@@ -116,17 +113,18 @@ class AttrSetMsg(Message):
         self.path = path
         self.value = value
         val = str(val).encode("utf-8")
-        super().__init__(OWMsg.write,self._path(self.path).encode('utf-8')+b'\0'+val.encode('utf-8'),len(val))
+        super().__init__(OWMsg.write,_path(self.path)+val.encode('utf-8'),len(val))
 
 class DirMsg(Message):
     """Read an owfs directory"""
     def __init__(self,path):
         self.path = path
-        super().__init__(OWMsg.dirall, self._path(self.path).encode('utf-8')+b'\0', 0)
+        super().__init__(OWMsg.dirall, _path(self.path), 0)
     
     def _process(self, data):
         res = []
-        for entry in data.split(","):
+        for entry in data.split(b","):
+            entry = entry.decode("utf-8")
             s = entry.rfind('/')
             if s > -1:
                 entry = entry[s+1:]

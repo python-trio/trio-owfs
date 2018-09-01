@@ -6,6 +6,7 @@ import typing as typ
 
 from .server import Server
 from .event import ServerRegistered, ServerDeregistered
+from .event import DeviceAdded, DeviceDeleted
 
 __all__ = ["OWFS"]
 
@@ -22,18 +23,24 @@ class Service:
                 await ow.add_task(rdr, ow)
                 s = await ow.add_server("localhost",4304")
 
-        You can listen to bus events::
+        Parameters:
+
+            scan: time between directory scans.
+                0: only after connecting
+                None: do not scan
 
         
         NB: trio-OWFS is opinionated. Device codes will contain checksums, 
         temperature is in degC, pressure is in mbar.
         """
 
-    def __init__(self, nursery):
+    def __init__(self, nursery, scan=0):
         self.nursery = nursery
         self._servers = set()  # typ.MutableSet[Server]  # Server
+        self._devices = dict() # ID => Device
         self._tasks = set()  # typ.MutableSet[]  # actually their cancel scopes
         self._event_queue = None  # typ.Optional[trio.Queue]
+        self.scan = scan
 
     async def add_server(self, host:str, port:int=4304):
         s = Server(self, host, port)
@@ -45,6 +52,15 @@ class Service:
             raise
         else:
             self._servers.add(s)
+            if self.scan is not None:
+                await s.start_scan(self.scan)
+
+    def add_device(self, dev, bus=None):
+        """Add a device, possibly seen on a bus."""
+        self._devices[dev.id] = dev
+        self.push_event(DeviceAdded(dev))
+        if bus is not None:
+            dev.locate(bus)
 
     async def _add_task(self, proc, *args, task_status=trio.TASK_STATUS_IGNORED):
         with trio.open_cancel_scope() as scope:
@@ -52,7 +68,10 @@ class Service:
             try:
                 await proc(*args)
             finally:
-                self._tasks.remove(scope)
+                try:
+                    self._tasks.remove(scope)
+                except KeyError:
+                    pass
 
     async def add_task(self, proc, *args):
         """
@@ -69,6 +88,10 @@ class Service:
     def _del_server(self, s):
         self._servers.remove(s)
         self.push_event(ServerDeregistered(s))
+
+    def _del_device(self, d):
+        self._devices.remove(d)
+        self.push_event(DeviceDeleted(s))
 
     # context
 
@@ -95,9 +118,9 @@ class Service:
         return await self._event_queue.get()
 
 @asynccontextmanager
-async def OWFS():
+async def OWFS(**kwargs):
     async with trio.open_nursery() as n:
-        s = Service(n)
+        s = Service(n, **kwargs)
         async with s:
             yield s
 
