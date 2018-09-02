@@ -45,6 +45,15 @@ class OWtempformat:
     rankine = 3
     _offset = 16
 
+class OWpressureformat:
+    mbar = 0
+    atm = 1
+    mmHg = 2
+    inHg = 3
+    psi = 4
+    pa = 5
+    _offset = 18
+
 class Message:
     def __init__(self,typ,data,rlen):
         #self.persist = persist
@@ -61,9 +70,10 @@ class Message:
         flags |= OWFlag.persist
         flags |= OWFlag.busret
         flags |= OWFlag.uncached
-        # flags |= 1<<8 ## ?
+        flags |= OWFlag.ownet
         flags |= OWtempformat.celsius << OWtempformat._offset
         flags |= OWdevformat.fdidc << OWdevformat._offset
+        flags |= OWpressureformat.mbar << OWpressureformat._offset
 
         print("SEND",0,len(self.data), self.typ, flags, self.rlen, 0, self.data)
         await stream.send_all(struct.pack("!6i",
