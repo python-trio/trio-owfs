@@ -128,6 +128,7 @@ class Server:
                 bus = self._buses.get(d, None)
                 if bus is None:
                     bus = Bus(self, d)
+                bus._unseen = 0
                 try:
                     old_paths.remove(d)
                 except KeyError:
@@ -135,10 +136,13 @@ class Server:
                 buses = await bus._scan_one()
                 old_paths -= buses
         for p in old_paths:
-            bus = self._buses.pop(p, None)
+            bus = self._buses.get(p, None)
             if bus is None:
                 continue
-            bus.delocate()
+            if bus._unseen > 2:
+                bus.delocate()
+            else:
+                bus._unseen += 1
 
 
     async def start_scan(self, interval):

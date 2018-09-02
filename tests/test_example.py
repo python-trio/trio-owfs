@@ -1,7 +1,7 @@
 import trio
 from .mock_server import server, EventChecker
 from trio_owfs.protocol import NOPMsg, DirMsg
-from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered
+from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered,DeviceAdded,DeviceLocated
 
 # We can just use 'async def test_*' to define async tests.
 # This also uses a virtual clock fixture, so time passes quickly and
@@ -34,13 +34,16 @@ async def test_basic_server():
     msgs = [
         NOPMsg(),
         DirMsg(()),
+        DirMsg(("bus.0",)),
     ]
     e1 = EventChecker([
         ServerRegistered,
         ServerConnected,
+        DeviceAdded("10.345678.90"),
+        DeviceLocated("10.345678.90"),
         ServerDisconnected,
         ServerDeregistered,
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
-        await trio.sleep(1)
+        await trio.sleep(0)
 

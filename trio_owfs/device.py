@@ -50,7 +50,17 @@ class Device:
 
         self.service = service
         self.bus = None
+
+        self._unseen = 0
+
         return self
+
+    def __eq__(self, x):
+        x = getattr(x,'id',x)
+        return self.id == x
+
+    def __hash__(self):
+        return hash(self.id)
 
     def __repr__(self):
         return "<%s:%s @ %s>" % (self.__class__.__name__,self.id, self.bus)
@@ -69,6 +79,7 @@ class Device:
             self._delocate()
 
     def _delocate(self):
+        self.bus._del_device(self)
         self.bus = None
         self.service.push_event(DeviceNotFound(self))
 
@@ -99,4 +110,8 @@ class SwitchDevice(Device):
             b = s._buses[b]
             b.delocate()
         super().delocate(self)
+
+@register
+class TemperatureDevice(Device):
+    family = 0x10
 

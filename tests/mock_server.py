@@ -22,18 +22,23 @@ async def some_server(tree, msgs, socket):
                 await rdr.write(0,format_flags,0)
             elif command == OWMsg.dirall:
                 subtree = tree
-                if data != b'':
-                    for k in data.split(b'/'):
-                        k = k.decode("utf-8")
-                        subtree = subtree[k]
+                path = []
+                for k in data.split(b'/'):
+                    if k == b'':
+                        continue
+                    path.append(k)
+                    k = k.decode("utf-8")
+                    subtree = subtree[k]
                 res = []
                 for k,v in subtree.items():
                     k = k.encode('utf-8')
-                    if isinstance(v,dict):
-                        k += b'/'
                     res.append(k)
-                data = b','.join(res)+b'\0'
-                await rdr.write(0,format_flags,0,data)
+                if path:
+                    path = b'/'+b'/'.join(path)+b'/'
+                else:
+                    path = b'/'
+                data = b','.join(path+k for k in res)
+                await rdr.write(0,format_flags,len(data),data+b'\0')
             else:
                 raise RuntimeError("Unknown command: %d %x %s %d" % (command, format_flags, repr(data), offset))
 
@@ -71,10 +76,10 @@ class EventChecker:
         except IndexError:
             raise RuntimeError("Unexpected event %s" % (e,))
         self.pos += 1
-        if isinstance(e,t):
+        if type(e) == type(t):
+            assert e == t, (e,t)
+        elif isinstance(t,type) and isinstance(e,t):
             pass
-        elif type(e) == type(t):
-            assert e == t
         else:
             raise RuntimeError("Want %s, got %s" % (t,e))
 
@@ -93,6 +98,7 @@ async def server(tree={}, msgs=(), events=None):
                 addr = server[0].socket.getsockname()
 
                 s = await ow.add_server(*addr)
+                await s.scan_done
                 yield ow
             finally:
                 if s is not None:

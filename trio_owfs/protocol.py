@@ -193,18 +193,19 @@ class DirMsg(Message):
 
     def __init__(self,path):
         self.path = path
-        super().__init__(OWMsg.dirall, _path(self.path), 0)
+        p = _path(self.path)
+        super().__init__(OWMsg.dirall, p, len(p)-1)
     
     def _process(self, data):
         if data == b'':
             return []
         res = []
         for entry in data.split(b","):
+            assert b'\0' not in entry
             entry = entry.decode("utf-8")
             s = entry.rfind('/')
             if s > -1:
                 entry = entry[s+1:]
-            entry = entry.rstrip("\0")
             res.append(entry)
         return res
 

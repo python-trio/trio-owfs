@@ -2,7 +2,7 @@
 Buses.
 """
 
-from .device import Device, NotADevice
+from .device import Device, NotADevice, split_id
 
 import logging
 logger = logging.getLogger(__name__)
@@ -17,9 +17,17 @@ class Bus:
 
         self._buses = dict()  # subpath => bus
         self._devices = dict()  # id => device
+        self._unseen = 0  # didn't find when scanning
 
     def __repr__(self):
         return "<%s:%s %s>" % (self.__class__.__name__,self.server, '/'+'/'.join(self.path))
+
+    def __eq__(self, x):
+        x = getattr(x,'path',x)
+        return self.path == x
+
+    def __hash__(self):
+        return hash(self.path)
 
     def delocate(self):
         """The bus can no longer be found"""
@@ -35,23 +43,42 @@ class Bus:
 
     async def _scan_one(self):
         buses = set()
-        for d in await self.dir():
+        res = await self.dir()
+        old_devs = set(self._devices.keys())
+        for d in res:
             try:
-                dev = Device(self.service, d)
+                ids = split_id(d)
             except NotADevice as err:
                 logger.debug("Not a device: %s",err)
                 continue
+            try:
+                dev = self._devices[d]
+            except KeyError:
+                dev = Device(self.service, d)
+            else:
+                old_devs.remove(d)
+            dev._unseen = 0
             logger.debug("Found %s/%s", '/'.join(self.path),d)
             self.add_device(dev)
             for b in dev.buses():
                 buses.add(b)
                 bus = self.server.get_bus(b)
                 buses.update(await bus._scan_one())
+
+        for d in old_devs:
+            dev = self._devices[d]
+            if dev._unseen > 2:
+                dev.delocate(self)
+            else:
+                dev._unseen += 1
         return buses
 
     def add_device(self, dev):
         self.service.add_device(dev, self)
         self._devices[dev.id] = dev
+
+    def _del_device(self, dev):
+        del self._devices[dev.id]
 
     def dir(self):
         return self.server.dir(*self.path)
