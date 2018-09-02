@@ -5,6 +5,7 @@ from async_generator import asynccontextmanager
 import typing as typ
 
 from .server import Server
+from .device import Device
 from .event import ServerRegistered, ServerDeregistered
 from .event import DeviceAdded, DeviceDeleted
 
@@ -66,6 +67,14 @@ class Service:
         if bus is not None:
             dev.locate(bus)
 
+    def get_device(self, id):
+        try:
+            return self._devices[id]
+        except KeyError:
+            dev = Device(self, id)
+            self.add_device(dev)
+            return dev
+
     async def _add_task(self, proc, *args, task_status=trio.TASK_STATUS_IGNORED):
         with trio.open_cancel_scope() as scope:
             task_status.started(scope)
@@ -76,6 +85,13 @@ class Service:
                     self._tasks.remove(scope)
                 except KeyError:
                     pass
+
+    async def scan_now(self, task_status=trio.TASK_STATUS_IGNORED):
+        """Scan the whole system."""
+        task_status.started()
+        async with trio.open_nursery() as n:
+            for s in list(self._servers):
+                await n.start(s.scan_now)
 
     async def add_task(self, proc, *args):
         """

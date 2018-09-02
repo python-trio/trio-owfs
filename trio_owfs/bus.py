@@ -51,12 +51,11 @@ class Bus:
             except NotADevice as err:
                 logger.debug("Not a device: %s",err)
                 continue
-            try:
-                dev = self._devices[d]
-            except KeyError:
-                dev = Device(self.service, d)
-            else:
+            dev = self.service.get_device(d)
+            if dev.bus is self:
                 old_devs.remove(d)
+            else:
+                self.add_device(dev)
             dev._unseen = 0
             logger.debug("Found %s/%s", '/'.join(self.path),d)
             self.add_device(dev)
@@ -74,7 +73,7 @@ class Bus:
         return buses
 
     def add_device(self, dev):
-        self.service.add_device(dev, self)
+        dev.locate(self)
         self._devices[dev.id] = dev
 
     def _del_device(self, dev):

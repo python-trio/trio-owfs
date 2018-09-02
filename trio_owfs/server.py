@@ -30,6 +30,7 @@ class Server:
         self._scan_task = None
         self._buses = dict()  # path => bus
         self._scan_done = trio.Event()
+        self._scan_lock = trio.Lock()
 
     @property
     def scan_done(self):
@@ -112,14 +113,26 @@ class Server:
 
     async def _scan(self, interval):
         try:
-            await self._scan_base()
+            async with self._scan_lock:
+                await self._scan_base()
             self._scan_done.set()
             if interval > 0:
                 while True:
                     await trio.sleep(interval)
-                    await self._scan_base()
+                    async with self._scan_lock:
+                        await self._scan_base()
         finally:
             self._scan_task = None
+
+    async def scan_now(self, task_status=trio.TASK_STATUS_IGNORED):
+        task_status.started()
+        if self._scan_lock.locked():
+            # scan in progress: just wait for it to finish
+            async with self._scan_lock:
+                pass
+        else:
+            async with self._scan_lock:
+                await self._scan_base()
 
     async def _scan_base(self):
         old_paths = set()
@@ -128,6 +141,7 @@ class Server:
                 bus = self._buses.get(d, None)
                 if bus is None:
                     bus = Bus(self, d)
+                    self._buses[d] = bus
                 bus._unseen = 0
                 try:
                     old_paths.remove(d)

@@ -70,6 +70,8 @@ class Device:
 
     def locate(self, bus):
         """The device has been seen here."""
+        if self.bus is bus:
+            return
         self.bus = bus
         self.service.push_event(DeviceLocated(self))
 
