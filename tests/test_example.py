@@ -1,15 +1,46 @@
 import trio
+from .mock_server import server, EventChecker
+from trio_owfs.protocol import NOPMsg, DirMsg
+from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered
 
 # We can just use 'async def test_*' to define async tests.
 # This also uses a virtual clock fixture, so time passes quickly and
 # predictably.
-async def test_sleep_with_autojump_clock(autojump_clock):
-    assert trio.current_time() == 0
 
-    for i in range(10):
-        print("Sleeping {} seconds".format(i))
-        start_time = trio.current_time()
-        await trio.sleep(i)
-        end_time = trio.current_time()
+basic_tree = {
+        "bus.0": {
+            "10.345678.90": {
+                "whatever": "hello",
+                "temperature": "12.5",
+            }
+        }
+    }
 
-        assert end_time - start_time == i
+async def test_empty_server():
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    async with server(msgs=msgs, events=e1) as ow:
+        await trio.sleep(0)
+
+async def test_basic_server():
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
+        await trio.sleep(1)
+

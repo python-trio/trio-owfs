@@ -49,8 +49,8 @@ async def main(host, port, debug):
 
     async with OWFS() as ow:
         await ow.add_task(mon, ow)
-        await ow.add_server(host, port)
-        await trio.sleep(10)
+        s = await ow.add_server(host, port)
+        await s.scan_done
 
 if __name__ == '__main__':
     main()

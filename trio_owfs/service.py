@@ -50,13 +50,14 @@ class Service:
         self.push_event(ServerRegistered(s))
         try:
             await s.start()
-        except BaseException:
+        except BaseException as exc:
             self.push_event(ServerDeregistered(s))
             raise
         else:
             self._servers.add(s)
             if self.scan is not None:
                 await s.start_scan(self.scan)
+        return s
 
     def add_device(self, dev, bus=None):
         """Add a device, possibly seen on a bus."""
@@ -86,7 +87,8 @@ class Service:
         return scope
 
     def push_event(self, event):
-        self._event_queue.put_nowait(event)
+        if self._event_queue is not None:
+            self._event_queue.put_nowait(event)
 
     def _del_server(self, s):
         self._servers.remove(s)
@@ -111,6 +113,24 @@ class Service:
             t.cancel()
 
     # listen to events
+
+    @property
+    def events(self):
+        class EventWrapper:
+            def __enter__(slf):
+                assert self._event_queue is None
+                self._event_queue = trio.Queue(1000)  # bus events
+                return self
+            def __exit__(slf, *tb):
+                if tb[1] is None:
+                    assert self._event_queue.is_empty()
+                self._event_queue = None
+            def __aiter__(slf):
+                return slf
+            async def __anext__(slf):
+                return await self._event_queue.get()
+
+        return EventWrapper()
 
     def __aiter__(self):
         if self._event_queue is None:

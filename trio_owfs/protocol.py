@@ -57,7 +57,60 @@ class OWpressureformat:
     pa = 5
     _offset = 18
 
+class MessageProtocol:
+    MAX_LENGTH=9999
+
+    def __init__(self, stream, is_server=False):
+        self.stream = stream
+        self.is_server = is_server
+        self._buf = b''
+
+    async def _read_buf(self, nbytes):
+        while len(self._buf) < nbytes:
+            self._buf += await self.stream.receive_some(4096)
+        res = self._buf[:nbytes]
+        self._buf = self._buf[nbytes:]
+        return res
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        hdr = await self._read_buf(24)
+        version, payload_len, ret_value, format_flags, data_len, offset = struct.unpack('!6i', hdr)
+        if offset & 0x8000:
+            offset = 0
+        elif offset != 0:
+            import pdb;pdb.set_trace()
+        if version != 0:
+            raise RuntimeError(f"Wrong version: {version}")
+        if payload_len == -1 and data_len == 0 and offset == 0:
+            raise RuntimeError("Server is busy?")
+        if payload_len > self.MAX_LENGTH:
+            raise RuntimeError(f"Server tried to send too much: {payload_len}")
+        if payload_len == 0:
+            data_len = 0
+        data = await self._read_buf(payload_len)
+        logger.debug("OW recv%s %x %x %x %x %x %x %s",
+                "S" if self.is_server else "",
+                version, payload_len, ret_value, format_flags, data_len, offset, repr(data))
+        data = data[offset:data_len]
+        if self.is_server:
+            return ret_value, format_flags, data, offset
+        else:
+            return ret_value, data
+
+    async def write(self, typ, flags, rlen, data=b'', offset=0):
+        logger.debug("OW send%s %x %x %x %x %x %x %s",
+                "S" if self.is_server else "",
+                0, len(data), typ, flags, rlen, offset, repr(data))
+        await self.stream.send_all(struct.pack("!6i",
+            0, len(data), typ, flags, rlen, offset) + data)
+
+
 class Message:
+    timeout = 0.5
+
     def __init__(self,typ,data,rlen):
         #self.persist = persist
         self.typ = typ
@@ -65,7 +118,7 @@ class Message:
         self.rlen = rlen
         self.event = ValueEvent()
         
-    async def write(self, stream):
+    async def write(self, protocol):
         """Send an OWFS message to the other end of the connection.
         """
         # Assume a modern server
@@ -78,9 +131,7 @@ class Message:
         flags |= OWdevformat.fdidc << OWdevformat._offset
         flags |= OWpressureformat.mbar << OWpressureformat._offset
 
-        logger.debug("OW send %x %x %x %x %x %x %s",0,len(self.data), self.typ, flags, self.rlen, 0, repr(self.data))
-        await stream.send_all(struct.pack("!6i",
-            0, len(self.data), self.typ, flags, self.rlen, 0) + self.data)
+        await protocol.write(self.typ, flags, self.rlen, self.data)
     
     def process_reply(self, res, data):
         if res != 0:
@@ -100,6 +151,10 @@ class Message:
     def done(self):
         return self.event.is_set
 
+    def check(self, cmd,data):
+        assert self.typ == cmd
+        assert self.data == data, (cmd,self.data,data)
+
 def _path(path):
     """Helper to build an OWFS path from a list"""
     if path:
@@ -114,6 +169,8 @@ class NOPMsg(Message):
 
 class AttrGetMsg(Message):
     """read an OWFS value"""
+    timeout = 2
+
     def __init__(self,path):
         assert path is not None
         self.path = path
@@ -121,6 +178,8 @@ class AttrGetMsg(Message):
         
 class AttrSetMsg(Message):
     """write an OWFS value"""
+    timeout = 1
+
     def __init__(self,path,value):
         assert path is not None
         self.path = path
@@ -130,11 +189,15 @@ class AttrSetMsg(Message):
 
 class DirMsg(Message):
     """Read an owfs directory"""
+    timeout = 10
+
     def __init__(self,path):
         self.path = path
         super().__init__(OWMsg.dirall, _path(self.path), 0)
     
     def _process(self, data):
+        if data == b'':
+            return []
         res = []
         for entry in data.split(b","):
             entry = entry.decode("utf-8")
@@ -144,4 +207,7 @@ class DirMsg(Message):
             entry = entry.rstrip("\0")
             res.append(entry)
         return res
+
+    def check(self, cmd, data):
+        super().check(cmd, data+b'\0')
 

@@ -8,7 +8,7 @@ import struct
 
 from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded, BusDeleted
-from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg
+from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg, MessageProtocol
 from .bus import Bus
 
 import logging
@@ -16,20 +16,24 @@ logger = logging.getLogger(__name__)
 
 class Server:
     """\
-        This 
+        Encapsulate one server connection.
     """
-    MAX_LENGTH=10000
 
     def __init__(self, service, host="localhost", port=4304):
         self.service = service
         self.host = host
         self.port = port
         self.stream = None
+        self._msg_proto = None
         self.requests = deque()
         self._wlock = trio.Lock()
-        self._buf = b''
         self._scan_task = None
         self._buses = dict()  # path => bus
+        self._scan_done = trio.Event()
+
+    @property
+    def scan_done(self):
+        return self._scan_done.wait()
 
     def get_bus(self, path):
         """Return the bus at this path. Allocate new if not existing."""
@@ -48,38 +52,10 @@ class Server:
     def __repr__(self):
         return "<%s:%s:%d %s>" % (self.__class__.__name__, self.host, self.port, "OK" if self.stream else "closed")
 
-    async def _read_buf(self, nbytes):
-        while len(self._buf) < nbytes:
-            self._buf += await self.stream.receive_some(4096)
-        res = self._buf[:nbytes]
-        self._buf = self._buf[nbytes:]
-        return res
-
-    async def _read_msg(self):
-        while True:
-            hdr = await self._read_buf(24)
-            version, payload_len, ret_value, format_flags, data_len, offset = struct.unpack('!6i', hdr)
-            if offset & 0x8000:
-                offset = 0
-            elif offset != 0:
-                import pdb;pdb.set_trace()
-            if version != 0:
-                raise RuntimeError(f"Wrong version: {version}")
-            if payload_len == -1 and data_len == 0 and offset == 0:
-                raise RuntimeError("Server is busy?")
-            if payload_len > self.MAX_LENGTH:
-                raise RuntimeError(f"Server tried to send too much: {payload_len}")
-            if payload_len == 0:
-                data_len = 0
-            data = await self._read_buf(payload_len)
-            logger.debug("OW recv %x %x %x %x %x %x %s",version, payload_len, ret_value, format_flags, data_len, offset, repr(data))
-            data = data[offset:data_len]
-            yield ret_value, data
-            
     async def _reader(self, task_status=trio.TASK_STATUS_IGNORED):
         with trio.open_cancel_scope() as scope:
             task_status.started(scope)
-            async for res,data in self._read_msg():
+            async for res,data in self._msg_proto:
                 msg = self.requests.popleft()
                 msg.process_reply(res,data)
                 if not msg.done():
@@ -95,6 +71,7 @@ class Server:
         if self.stream is not None:
             raise RuntimeError("already open")
         self.stream = await trio.open_tcp_stream(self.host, self.port)
+        self._msg_proto = MessageProtocol(self.stream, is_server=False)
         self.service.push_event(ServerConnected(self))
         self._read_scope = await self.service.nursery.start(self._reader)
         try:
@@ -106,9 +83,10 @@ class Server:
         
     async def chat(self, msg):
         async with self._wlock:
-            await msg.write(self.stream)
+            await msg.write(self._msg_proto)
             self.requests.append(msg)
-        return await msg.get_reply()
+        with trio.fail_after(msg.timeout):
+            return await msg.get_reply()
 
     async def drop(self):
         """Stop talking and delete yourself"""
@@ -135,6 +113,7 @@ class Server:
     async def _scan(self, interval):
         try:
             await self._scan_base()
+            self._scan_done.set()
             if interval > 0:
                 while True:
                     await trio.sleep(interval)
