@@ -8,6 +8,9 @@ from .server import Server
 from .event import ServerRegistered, ServerDeregistered
 from .event import DeviceAdded, DeviceDeleted
 
+import logging
+logger = logging.getLogger(__name__)
+
 __all__ = ["OWFS"]
 
 class Service:

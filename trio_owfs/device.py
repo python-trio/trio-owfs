@@ -6,6 +6,9 @@ import attr
 
 from .event import DeviceLocated, DeviceNotFound
 
+import logging
+logger = logging.getLogger(__name__)
+
 __all__ = ["Device"]
 
 @attr.s
@@ -34,8 +37,7 @@ class Device:
     """
 
     def __init__(self, service, id):
-        print("NewDev",id)
-        pass
+        logger.debug("NewDev %s",id)
 
     def __new__(cls, service, id):
         family, code, chksum = split_id(id)

@@ -4,6 +4,9 @@ Buses.
 
 from .device import Device, NotADevice
 
+import logging
+logger = logging.getLogger(__name__)
+
 class Bus:
     """Describes one bus.
     """
@@ -36,9 +39,9 @@ class Bus:
             try:
                 dev = Device(self.service, d)
             except NotADevice as err:
-                print("No",err)
+                logger.debug("Not a device: %s",err)
                 continue
-            print(self.path,d)
+            logger.debug("Found %s/%s", '/'.join(self.path),d)
             self.add_device(dev)
             for b in dev.buses():
                 buses.add(b)

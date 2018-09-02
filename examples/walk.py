@@ -30,6 +30,8 @@ import collections
 import trio_click as click
 from trio_owfs import OWFS
 
+import logging
+
 __all__ = ['main']
 
 async def mon(ow, *, task_status=trio.TASK_STATUS_IGNORED):
@@ -37,15 +39,17 @@ async def mon(ow, *, task_status=trio.TASK_STATUS_IGNORED):
     async for msg in ow:
         print(msg)
 
-
 @click.command()
 @click.option('--host', default='localhost', help='host running owserver')
 @click.option('--port', default=4304, type=int, help='owserver port')
-async def main(host, port):
+@click.option('--debug', '-d', is_flag=True, help='Show debug information')
+async def main(host, port, debug):
+    logging.basicConfig(level=logging.DEBUG if debug else logging.INFO)
+
     async with OWFS() as ow:
         await ow.add_task(mon, ow)
         await ow.add_server(host, port)
-        await trio.sleep(2)
+        await trio.sleep(10)
 
 if __name__ == '__main__':
     main()

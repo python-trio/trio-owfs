@@ -5,6 +5,9 @@
 import struct
 from .util import ValueEvent
 
+import logging
+logger = logging.getLogger(__name__)
+
 class OWMsg:
     """Constants for the owserver api message types."""
     error       = 0
@@ -75,7 +78,7 @@ class Message:
         flags |= OWdevformat.fdidc << OWdevformat._offset
         flags |= OWpressureformat.mbar << OWpressureformat._offset
 
-        print("SEND",0,len(self.data), self.typ, flags, self.rlen, 0, self.data)
+        logger.debug("OW send %x %x %x %x %x %x %s",0,len(self.data), self.typ, flags, self.rlen, 0, repr(self.data))
         await stream.send_all(struct.pack("!6i",
             0, len(self.data), self.typ, flags, self.rlen, 0) + self.data)
     

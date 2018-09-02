@@ -11,6 +11,9 @@ from .event import BusAdded, BusDeleted
 from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg
 from .bus import Bus
 
+import logging
+logger = logging.getLogger(__name__)
+
 class Server:
     """\
         This 
@@ -69,7 +72,7 @@ class Server:
             if payload_len == 0:
                 data_len = 0
             data = await self._read_buf(payload_len)
-            print("RECV",version, payload_len, ret_value, format_flags, data_len, offset, data)
+            logger.debug("OW recv %x %x %x %x %x %x %s",version, payload_len, ret_value, format_flags, data_len, offset, repr(data))
             data = data[offset:data_len]
             yield ret_value, data
             
@@ -142,7 +145,6 @@ class Server:
     async def _scan_base(self):
         old_paths = set()
         for d in await self.dir():
-            print(d)
             if d.startswith("bus."):
                 bus = self._buses.get(d, None)
                 if bus is None:
