@@ -31,13 +31,14 @@ import trio_click as click
 from trio_owfs import OWFS
 
 import logging
+logger = logging.getLogger('examples.walk')
 
 __all__ = ['main']
 
 async def mon(ow, *, task_status=trio.TASK_STATUS_IGNORED):
     task_status.started()
     async for msg in ow:
-        print(msg)
+        logger.info("%s", msg)
 
 @click.command()
 @click.option('--host', default='localhost', help='host running owserver')
