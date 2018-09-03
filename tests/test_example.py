@@ -32,6 +32,22 @@ async def test_empty_server():
     async with server(msgs=msgs, events=e1) as ow:
         await trio.sleep(0)
 
+async def test_send_idle(mock_clock):
+    mock_clock.autojump_threshold = 0.1
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+        NOPMsg(),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    async with server(msgs=msgs, events=e1) as ow:
+        await trio.sleep(15)
+
 async def test_missing_event():
     msgs = [
         NOPMsg(),
