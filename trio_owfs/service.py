@@ -52,6 +52,7 @@ class Service:
         try:
             await s.start()
         except BaseException as exc:
+            logger.exception("Could not start")
             self.push_event(ServerDeregistered(s))
             raise
         else:

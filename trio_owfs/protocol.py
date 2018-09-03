@@ -57,8 +57,12 @@ class OWpressureformat:
     pa = 5
     _offset = 18
 
-class ServerBusy(RuntimeError):
+class ServerBusy(Exception):
     """Receiver error when the server signals it's busy"""
+    pass
+
+class Retry(Exception):
+    """Sender resubmitted."""
     pass
 
 class MessageProtocol:
@@ -71,7 +75,10 @@ class MessageProtocol:
 
     async def _read_buf(self, nbytes):
         while len(self._buf) < nbytes:
-            self._buf += await self.stream.receive_some(4096)
+            more = await self.stream.receive_some(4096)
+            if not more:
+                raise StopAsyncIteration
+            self._buf += more
         res = self._buf[:nbytes]
         self._buf = self._buf[nbytes:]
         return res
@@ -127,7 +134,7 @@ class Message:
         self.typ = typ
         self.data = data
         self.rlen = rlen
-        self.event = None
+        self.event = ValueEvent()
         
     async def write(self, protocol):
         """Send an OWFS message to the other end of the connection.
@@ -141,11 +148,19 @@ class Message:
         flags |= OWtempformat.celsius << OWtempformat._offset
         flags |= OWdevformat.fdidc << OWdevformat._offset
         flags |= OWpressureformat.mbar << OWpressureformat._offset
+
+        # TODO
+        if self.event is not None and not self.event.is_set():
+            self.event.set_error(Retry())
         self.event = ValueEvent()
 
         await protocol.write(self.typ, flags, self.rlen, self.data)
     
+    def _resubmit(self):
+        self.event = ValueEvent()
+
     def process_reply(self, res, data):
+        logger.debug("PROCESS %s %s %s",self,res,data)
         if res != 0:
             raise RuntimeError("Result for %s is %d (%s)!" % (repr(self), res, repr(data)))
         data = self._process(data)
@@ -166,9 +181,11 @@ class Message:
     def done(self):
         return self.event.is_set
 
-    def check(self, cmd,data):
-        assert self.typ == cmd
-        assert self.data == data, (cmd,self.data,data)
+    def _check(self, cmd,data=None):
+        """Used in testing: verify that a message is correct."""
+        assert self.typ == cmd, (self.typ,cmd)
+        if data is not None:
+            assert self.data == data, (cmd,self.data,data)
 
 def _path(path):
     """Helper to build an OWFS path from a list"""
@@ -224,6 +241,6 @@ class DirMsg(Message):
             res.append(entry)
         return res
 
-    def check(self, cmd, data):
-        super().check(cmd, data+b'\0')
+    def _check(self, cmd, data):
+        super()._check(cmd, data+b'\0')
 

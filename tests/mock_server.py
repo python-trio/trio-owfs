@@ -7,24 +7,61 @@ from functools import partial
 import logging
 logger = logging.getLogger(__name__)
 
+def _chk(v):
+    if v is None:
+        return False
+    v[0] += 1
+    if v[0] >= len(v):
+        v[0] = 1
+    return v[v[0]]
+
 async def some_server(tree, msgs, options, socket):
     rdr = MessageProtocol(socket, is_server=True)
     logger.debug("START Server")
-    msgs = iter(msgs)
-    each_busy = options.get("busy_every",0)
-    try:
-        async for command, format_flags, data, offset in rdr:
-            if each_busy:
-                each_busy -= 1
-                await rdr.write(0,format_flags,0, data=None)
-                continue
-            else:
-                each_busy = options.get("busy_every",0)
+    if msgs:
+        midx = 0
+        if isinstance(msgs[0],list):
+            msgs.insert(0,0)
+        if isinstance(msgs[0],int):
+            midx = msgs[0]
+            msgs[0] += 1
+            msgs = msgs[msgs[0]]
+        msgs = iter(msgs)
+        mpos = 0
+
+    def _end(msgs):
+        nonlocal mpos
+        if msgs:
+            mpos += 1
             try:
                 m = next(msgs)
             except StopIteration:
-                raise RuntimeError("Unexpected command: %d %x %s %d" % (command, format_flags, repr(data), offset)) from None
-            m.check(command, data)
+                pass
+            else:
+                raise RuntimeError("Message '%s' not seen (%d,%d)" % (m,midx,mpos))
+
+    each_busy = options.get("busy_every",None)
+    each_close = options.get("close_every",None)
+    try:
+        if _chk(each_close):
+            _end(msgs)
+            return
+        async for command, format_flags, data, offset in rdr:
+            if _chk(each_busy):
+                await rdr.write(0,format_flags,0, data=None)
+                continue
+            if msgs:
+                try:
+                    m = next(msgs)
+                except StopIteration:
+                    raise RuntimeError("Unexpected command: %d %x %s %d" % (command, format_flags, repr(data), offset)) from None
+                try:
+                    m._check(command, data)
+                except Exception:
+                    raise RuntimeError("Message '%s' wrong seen (%d,%d)" % (m,midx,mpos))
+            if _chk(each_close):
+                _end(msgs)
+                return
             if command == OWMsg.nop:
                 await rdr.write(0,format_flags,0)
             elif command == OWMsg.dirall:
@@ -49,16 +86,9 @@ async def some_server(tree, msgs, options, socket):
             else:
                 raise RuntimeError("Unknown command: %d %x %s %d" % (command, format_flags, repr(data), offset))
 
-    except Exception as exc:
-        logger.exception(exc)
+        _end(msgs)
     finally:
         logger.debug("END Server")
-        try:
-            m = next(msgs)
-        except StopIteration:
-            pass
-        else:
-            raise RuntimeError("Message '%s' not seen",m)
 
 class EventChecker:
     def __init__(self, events=[]):
@@ -73,9 +103,13 @@ class EventChecker:
             with ow.events as ev:
                 task_status.started()
                 async for e in ev:
+                    logger.debug("Event %s",e)
                     self.check_next(e)
-        finally:
+        except Exception as exc:
             self.check_last()
+        else:
+            self.check_last()
+        # don't check on BaseException =Cancellation
 
     def check_next(self, e):
         try:
@@ -88,10 +122,11 @@ class EventChecker:
         elif isinstance(t,type) and isinstance(e,t):
             pass
         else:
-            raise RuntimeError("Want %s, got %s" % (t,e))
+            raise RuntimeError("Event #%d: Want %s, got %s" % (self.pos,t,e))
 
     def check_last(self):
-        assert self.pos == len(self.events)
+        logger.debug("Event END")
+        assert self.pos == len(self.events), (self.pos,self.events[self.pos])
 
 @asynccontextmanager
 async def server(tree={}, msgs=(), options={}, events=None):

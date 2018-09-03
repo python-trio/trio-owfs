@@ -1,4 +1,5 @@
 import trio
+import pytest
 from .mock_server import server, EventChecker
 from trio_owfs.protocol import NOPMsg, DirMsg
 from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered,DeviceAdded,DeviceLocated,DeviceNotFound
@@ -31,6 +32,69 @@ async def test_empty_server():
     async with server(msgs=msgs, events=e1) as ow:
         await trio.sleep(0)
 
+async def test_wrong_msg():
+    msgs = [
+        NOPMsg(),
+        DirMsg(("foobar",)),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    with pytest.raises(RuntimeError) as r:
+        async with server(msgs=msgs, events=e1) as ow:
+            await trio.sleep(0)
+    assert " wrong seen " in r.value.args[0]
+
+async def test_wrong_msg_2():
+    msgs = [
+        NOPMsg(),
+        NOPMsg(),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    with pytest.raises(RuntimeError) as r:
+        async with server(msgs=msgs, events=e1) as ow:
+            await trio.sleep(0)
+    assert " wrong seen " in r.value.args[0]
+
+async def test_missing_msg():
+    msgs = [
+        NOPMsg(),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+    ])
+    with pytest.raises(RuntimeError) as r:
+        async with server(msgs=msgs, events=e1) as ow:
+            await trio.sleep(0)
+    assert "Unexpected command:" in r.value.args[0]
+
+async def test_more_msg():
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+        DirMsg(()),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    with pytest.raises(RuntimeError) as r:
+        async with server(msgs=msgs, events=e1) as ow:
+            await trio.sleep(0)
+    assert " not seen " in r.value.args[0]
+
 async def test_basic_server():
     msgs = [
         NOPMsg(),
@@ -62,7 +126,62 @@ async def test_busy_server():
         ServerDisconnected,
         ServerDeregistered,
     ])
-    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'busy_every':1}) as ow:
+    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'busy_every':[0,0,1]}) as ow:
+        await trio.sleep(0)
+    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'busy_every':[1,0,1]}) as ow:
+        await trio.sleep(0)
+
+async def test_disconnecting_server():
+    msgs = [[
+        NOPMsg(),
+        DirMsg(()),
+    ],[
+        DirMsg(()),
+        DirMsg(("bus.0",)),
+    ],[
+        DirMsg(("bus.0",)),
+    ]]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerConnected,
+        ServerDisconnected,
+        ServerConnected,
+        DeviceAdded("10.345678.90"),
+        DeviceLocated("10.345678.90"),
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'close_every':[0,0,0,1]}) as ow:
+        await trio.sleep(0)
+
+async def test_disconnecting_server_2():
+    msgs = [[
+    ],[
+        NOPMsg(),
+        DirMsg(()),
+    ],[
+        DirMsg(()),
+        DirMsg(("bus.0",)),
+    ],[
+        DirMsg(("bus.0",)),
+    ]]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerConnected,
+        ServerDisconnected,
+        ServerConnected,
+        ServerDisconnected,
+        ServerConnected,
+        DeviceAdded("10.345678.90"),
+        DeviceLocated("10.345678.90"),
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'close_every':[0,1,0,0]}) as ow:
         await trio.sleep(0)
 
 async def test_dropped_device():

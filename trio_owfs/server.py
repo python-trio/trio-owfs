@@ -8,7 +8,7 @@ import struct
 
 from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded, BusDeleted
-from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg, MessageProtocol, ServerBusy
+from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg, MessageProtocol, ServerBusy, Retry
 from .bus import Bus
 
 import logging
@@ -27,6 +27,8 @@ class Server:
         self._msg_proto = None
         self.requests = deque()
         self._wlock = trio.Lock()
+        self._wqueue = trio.Queue(10)
+        self._wmsg = None
         self._scan_task = None
         self._buses = dict()  # path => bus
         self._scan_done = trio.Event()
@@ -56,18 +58,43 @@ class Server:
     async def _reader(self, task_status=trio.TASK_STATUS_IGNORED):
         with trio.open_cancel_scope() as scope:
             task_status.started(scope)
-            it = self._msg_proto.__aiter__()
             while True:
-                try:
-                    res,data = await self._msg_proto.__anext__()
-                except ServerBusy as exc:
-                    msg = self.requests.popleft()
-                    msg.process_error(exc)
-                else:
-                    msg = self.requests.popleft()
-                    msg.process_reply(res,data)
-                    if not msg.done():
-                        self.requests.appendleft(msg)
+                it = self._msg_proto.__aiter__()
+                while True:
+                    try:
+                        res,data = await it.__anext__()
+                    except ServerBusy as exc:
+                        msg = self.requests.popleft()
+                        msg.process_error(exc)
+                    except StopAsyncIteration:
+                        await self._reconnect()
+                        break
+                    else:
+                        msg = self.requests.popleft()
+                        msg.process_reply(res,data)
+                        if not msg.done():
+                            self.requests.appendleft(msg)
+
+    async def _reconnect(self):
+        self.service.push_event(ServerDisconnected(self))
+        self._write_scope.cancel()
+        self._write_scope = None
+        await self.stream.aclose()
+        backoff = 0.5
+        while True:
+            try:
+                self.stream = await trio.open_tcp_stream(self.host, self.port)
+            except OSError:
+                await trio.sleep(backoff)
+                if backoff < 10:
+                    backoff *= 1.5
+            else:
+                self._msg_proto = MessageProtocol(self.stream, is_server=False)
+                for msg in list(self.requests):
+                    await msg.write(self._msg_proto)
+                self.service.push_event(ServerConnected(self))
+                self._write_scope = await self.service.nursery.start(self._writer)
+                return
 
     async def start(self):
         """Start talking. Returns when the connection is established,
@@ -81,6 +108,7 @@ class Server:
         self.stream = await trio.open_tcp_stream(self.host, self.port)
         self._msg_proto = MessageProtocol(self.stream, is_server=False)
         self.service.push_event(ServerConnected(self))
+        self._write_scope = await self.service.nursery.start(self._writer)
         self._read_scope = await self.service.nursery.start(self._reader)
         try:
             await self.chat(NOPMsg())
@@ -88,20 +116,44 @@ class Server:
             self._read_scope.cancel()
             await self.aclose()
             raise
-        
+
     async def chat(self, msg):
         backoff = 0.1
+        await self._wqueue.put(msg)
         while True:
             try:
-                async with self._wlock:
-                    await msg.write(self._msg_proto)
-                    self.requests.append(msg)
-                with trio.fail_after(msg.timeout):
-                    return await msg.get_reply()
+                return await msg.get_reply()
             except ServerBusy:
                 await trio.sleep(backoff)
                 if backoff < 2:
                     backoff *= 1.5
+                msg._resubmit()
+                await self._wqueue.put(msg)
+            except Retry:
+                # The message has been repeated.
+                pass
+
+    async def _writer(self, task_status=trio.TASK_STATUS_IGNORED):
+        with trio.open_cancel_scope() as scope:
+            task_status.started(scope)
+            backoff = 0.1
+            while True:
+                if self._wmsg is None:
+                    try:
+                        with trio.fail_after(10):
+                            self._wmsg = await self._wqueue.get()
+                    except trio.TooSlowError:
+                        self._wmsg = NOPMsg()
+
+                try:
+                    await self._wmsg.write(self._msg_proto)
+                except trio.ClosedResourceError:
+                    # will get restarted by .reconnect()
+                    return
+                else:
+                    self.requests.append(self._wmsg)
+                    self._wmsg = None
+
 
     async def drop(self):
         """Stop talking and delete yourself"""
@@ -113,6 +165,9 @@ class Server:
     async def aclose(self):
         if self.stream is None:
             return
+        if self._write_scope is not None:
+            self._write_scope.cancel()
+            self._write_scope = None
         if self._read_scope is not None:
             self._read_scope.cancel()
             self._read_scope = None
