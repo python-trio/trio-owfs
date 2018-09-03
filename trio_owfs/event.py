@@ -39,12 +39,25 @@ class BusEvent(Event):
 @attr.s
 class BusAdded(BusEvent):
     """The Bus has been created. Its location is not yet known!"""
-    Bus = attr.ib()
+    bus = attr.ib()
+
+class BusAdded_Path:
+    """Not an event. Used for storing the bus path for comparisons in tests."""
+    def __init__(self, *path):
+        self.path = path
+    def __eq__(self,x):
+        if isinstance(x,BusAdded_Path):
+            x=x.path
+        elif isinstance(x,BusAdded):
+            x=x.bus.path
+        elif not isinstance(x,(list,tuple)):
+            return False
+        return self.path == x
 
 @attr.s
 class BusDeleted(BusEvent):
     """The Bus has been deleted"""
-    Bus = attr.ib()
+    bus = attr.ib()
 
 class DeviceEvent(Event):
     """Base class for all device-related events"""

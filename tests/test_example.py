@@ -2,7 +2,7 @@ import trio
 import pytest
 from .mock_server import server, EventChecker
 from trio_owfs.protocol import NOPMsg, DirMsg
-from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered,DeviceAdded,DeviceLocated,DeviceNotFound,BusAdded
+from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered,DeviceAdded,DeviceLocated,DeviceNotFound,BusAdded_Path,BusAdded
 from copy import deepcopy
 
 # We can just use 'async def test_*' to define async tests.
@@ -94,7 +94,7 @@ async def test_bad_event():
     with pytest.raises(RuntimeError) as r:
         async with server(msgs=msgs, events=e1) as ow:
             await trio.sleep(0)
-    assert ": Want " in r.value.args[0]
+    assert "Wrong event: want " in r.value.args[0]
 
 async def test_wrong_msg():
     msgs = [
@@ -168,7 +168,7 @@ async def test_basic_server():
     e1 = EventChecker([
         ServerRegistered,
         ServerConnected,
-        BusAdded,
+        BusAdded_Path("bus.0"),
         DeviceAdded("10.345678.90"),
         DeviceLocated("10.345678.90"),
         ServerDisconnected,
@@ -176,6 +176,26 @@ async def test_basic_server():
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
         await trio.sleep(0)
+
+async def test_wrong_bus():
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+        DirMsg(("bus.0",)),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        BusAdded_Path("bus-whatever"),
+#       DeviceAdded("10.345678.90"),
+#       DeviceLocated("10.345678.90"),
+#       ServerDisconnected,
+#       ServerDeregistered,
+    ])
+    with pytest.raises(RuntimeError) as r:
+        async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
+            await trio.sleep(0)
+    assert "Wrong event: want " in r.value.args[0]
 
 async def test_slow_server(mock_clock):
     mock_clock.autojump_threshold = 0.1
@@ -376,7 +396,7 @@ async def test_manual_bus(mock_clock):
     e1 = EventChecker([
         ServerRegistered,
         ServerConnected,
-        BusAdded,
+        BusAdded_Path("bus.0"),
         Checkpoint,
         Checkpoint,
         DeviceAdded("10.345678.90"),

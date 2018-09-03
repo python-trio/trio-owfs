@@ -134,12 +134,10 @@ class EventChecker:
         except IndexError:
             raise RuntimeError("Unexpected event %s" % (e,))
         self.pos += 1
-        if type(e) == type(t):
-            assert e == t, (e,t)
-        elif isinstance(t,type) and isinstance(e,t):
+        if isinstance(t,type) and isinstance(e,t):
             pass
-        else:
-            raise RuntimeError("Event #%d: Want %s, got %s" % (self.pos,t,e))
+        elif not (t == e):
+            raise RuntimeError("Wrong event: want %s but has %s" % (t,e))
 
     def check_last(self):
         logger.debug("Event END")
