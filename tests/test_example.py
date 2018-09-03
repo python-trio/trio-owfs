@@ -314,3 +314,36 @@ async def test_dropped_device():
         assert dev._unseen == 3
         assert dev.bus is None
 
+async def test_manual_device(mock_clock):
+    class Checkpoint:
+        pass
+    mock_clock.autojump_threshold = 0.1
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+        DirMsg(("bus.0",)),
+        NOPMsg(),
+        DirMsg(()),
+        DirMsg(("bus.0",)),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        DeviceAdded("10.345678.90"),
+        Checkpoint,
+        Checkpoint,
+        DeviceLocated("10.345678.90"),
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    my_tree = deepcopy(basic_tree)
+    entry = my_tree['bus.0'].pop('10.345678.90')
+    async with server(msgs=msgs, events=e1, tree=my_tree) as ow:
+        dev = ow.get_device('10.345678.90')
+        assert dev.bus is None
+        ow.push_event(Checkpoint())
+        await trio.sleep(15)
+        ow.push_event(Checkpoint())
+        my_tree['bus.0']['10.345678.90'] = entry
+        await ow.scan_now()
+        assert dev.bus is not None
