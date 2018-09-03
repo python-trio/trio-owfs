@@ -48,7 +48,8 @@ async def main(host, port, debug):
     logging.basicConfig(level=logging.DEBUG if debug else logging.INFO)
 
     async with OWFS() as ow:
-        await ow.add_task(mon, ow)
+        if debug:
+            await ow.add_task(mon, ow)
         s = await ow.add_server(host, port)
         await s.scan_done
 
