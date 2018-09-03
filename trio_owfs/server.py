@@ -8,7 +8,7 @@ import struct
 
 from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded, BusDeleted
-from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg, MessageProtocol
+from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg, MessageProtocol, ServerBusy
 from .bus import Bus
 
 import logging
@@ -56,11 +56,18 @@ class Server:
     async def _reader(self, task_status=trio.TASK_STATUS_IGNORED):
         with trio.open_cancel_scope() as scope:
             task_status.started(scope)
-            async for res,data in self._msg_proto:
-                msg = self.requests.popleft()
-                msg.process_reply(res,data)
-                if not msg.done():
-                    self.requests.appendleft(msg)
+            it = self._msg_proto.__aiter__()
+            while True:
+                try:
+                    res,data = await self._msg_proto.__anext__()
+                except ServerBusy as exc:
+                    msg = self.requests.popleft()
+                    msg.process_error(exc)
+                else:
+                    msg = self.requests.popleft()
+                    msg.process_reply(res,data)
+                    if not msg.done():
+                        self.requests.appendleft(msg)
 
     async def start(self):
         """Start talking. Returns when the connection is established,
@@ -83,11 +90,18 @@ class Server:
             raise
         
     async def chat(self, msg):
-        async with self._wlock:
-            await msg.write(self._msg_proto)
-            self.requests.append(msg)
-        with trio.fail_after(msg.timeout):
-            return await msg.get_reply()
+        backoff = 0.1
+        while True:
+            try:
+                async with self._wlock:
+                    await msg.write(self._msg_proto)
+                    self.requests.append(msg)
+                with trio.fail_after(msg.timeout):
+                    return await msg.get_reply()
+            except ServerBusy:
+                await trio.sleep(backoff)
+                if backoff < 2:
+                    backoff *= 1.5
 
     async def drop(self):
         """Stop talking and delete yourself"""

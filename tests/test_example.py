@@ -48,6 +48,23 @@ async def test_basic_server():
     async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
         await trio.sleep(0)
 
+async def test_busy_server():
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+        DirMsg(("bus.0",)),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        DeviceAdded("10.345678.90"),
+        DeviceLocated("10.345678.90"),
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'busy_every':1}) as ow:
+        await trio.sleep(0)
+
 async def test_dropped_device():
     msgs = [
         NOPMsg(),

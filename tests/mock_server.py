@@ -7,12 +7,19 @@ from functools import partial
 import logging
 logger = logging.getLogger(__name__)
 
-async def some_server(tree, msgs, socket):
+async def some_server(tree, msgs, options, socket):
     rdr = MessageProtocol(socket, is_server=True)
     logger.debug("START Server")
     msgs = iter(msgs)
+    each_busy = options.get("busy_every",0)
     try:
         async for command, format_flags, data, offset in rdr:
+            if each_busy:
+                each_busy -= 1
+                await rdr.write(0,format_flags,0, data=None)
+                continue
+            else:
+                each_busy = options.get("busy_every",0)
             try:
                 m = next(msgs)
             except StopIteration:
@@ -87,12 +94,12 @@ class EventChecker:
         assert self.pos == len(self.events)
 
 @asynccontextmanager
-async def server(tree={}, msgs=(), events=None):
+async def server(tree={}, msgs=(), options={}, events=None):
     async with OWFS() as ow:
         async with trio.open_nursery() as n:
             s = None
             try:
-                server = await n.start(partial(trio.serve_tcp, host="127.0.0.1"), partial(some_server, tree, msgs), 0)
+                server = await n.start(partial(trio.serve_tcp, host="127.0.0.1"), partial(some_server, tree, msgs, options), 0)
                 if events is not None:
                     await n.start(events, ow)
                 addr = server[0].socket.getsockname()

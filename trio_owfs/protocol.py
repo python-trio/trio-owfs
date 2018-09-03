@@ -57,6 +57,10 @@ class OWpressureformat:
     pa = 5
     _offset = 18
 
+class ServerBusy(RuntimeError):
+    """Receiver error when the server signals it's busy"""
+    pass
+
 class MessageProtocol:
     MAX_LENGTH=9999
 
@@ -85,7 +89,7 @@ class MessageProtocol:
         if version != 0:
             raise RuntimeError(f"Wrong version: {version}")
         if payload_len == -1 and data_len == 0 and offset == 0:
-            raise RuntimeError("Server is busy?")
+            raise ServerBusy
         if payload_len > self.MAX_LENGTH:
             raise RuntimeError(f"Server tried to send too much: {payload_len}")
         if payload_len == 0:
@@ -101,11 +105,18 @@ class MessageProtocol:
             return ret_value, data
 
     async def write(self, typ, flags, rlen, data=b'', offset=0):
-        logger.debug("OW send%s %x %x %x %x %x %x %s",
-                "S" if self.is_server else "",
-                0, len(data), typ, flags, rlen, offset, repr(data))
-        await self.stream.send_all(struct.pack("!6i",
-            0, len(data), typ, flags, rlen, offset) + data)
+        if data is None:
+            logger.debug("OW send%s %x %x %x %x %x %x -",
+                    "S" if self.is_server else "",
+                    0, -1, typ, flags, rlen, offset)
+            await self.stream.send_all(struct.pack("!6i",
+                0, -1, typ, flags, rlen, offset))
+        else:
+            logger.debug("OW send%s %x %x %x %x %x %x %s",
+                    "S" if self.is_server else "",
+                    0, len(data), typ, flags, rlen, offset, repr(data))
+            await self.stream.send_all(struct.pack("!6i",
+                0, len(data), typ, flags, rlen, offset) + data)
 
 
 class Message:
@@ -116,7 +127,7 @@ class Message:
         self.typ = typ
         self.data = data
         self.rlen = rlen
-        self.event = ValueEvent()
+        self.event = None
         
     async def write(self, protocol):
         """Send an OWFS message to the other end of the connection.
@@ -130,6 +141,7 @@ class Message:
         flags |= OWtempformat.celsius << OWtempformat._offset
         flags |= OWdevformat.fdidc << OWdevformat._offset
         flags |= OWpressureformat.mbar << OWpressureformat._offset
+        self.event = ValueEvent()
 
         await protocol.write(self.typ, flags, self.rlen, self.data)
     
@@ -139,6 +151,9 @@ class Message:
         data = self._process(data)
         if data is not None:
             self.event.set(data)
+    
+    def process_error(self, exc):
+        self.event.set_error(exc)
     
     def _process(self, data):
         return data
