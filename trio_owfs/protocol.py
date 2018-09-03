@@ -91,7 +91,7 @@ class MessageProtocol:
         version, payload_len, ret_value, format_flags, data_len, offset = struct.unpack('!6i', hdr)
         if offset & 0x8000:
             offset = 0
-        elif offset != 0:
+        elif offset != 0 and not is_server:
             import pdb;pdb.set_trace()
         if version != 0:
             raise RuntimeError(f"Wrong version: {version}")
@@ -105,10 +105,10 @@ class MessageProtocol:
         logger.debug("OW recv%s %x %x %x %x %x %x %s",
                 "S" if self.is_server else "",
                 version, payload_len, ret_value, format_flags, data_len, offset, repr(data))
-        data = data[offset:data_len]
         if self.is_server:
-            return ret_value, format_flags, data, offset
+            return ret_value, format_flags, data, data_len
         else:
+            data = data[:data_len]
             return ret_value, data
 
     async def write(self, typ, flags, rlen, data=b'', offset=0):
@@ -193,10 +193,7 @@ class Message:
 
 def _path(path):
     """Helper to build an OWFS path from a list"""
-    if path:
-        path = '/'+'/'.join(str(x) for x in path)
-    else:
-        path = ""
+    path = '/'+'/'.join(str(x) for x in path)
     return path.encode('utf-8')+b'\0'
 
 class NOPMsg(Message):
@@ -207,7 +204,7 @@ class AttrGetMsg(Message):
     """read an OWFS value"""
     timeout = 2
 
-    def __init__(self,path):
+    def __init__(self,*path):
         assert path is not None
         self.path = path
         super().__init__(OWMsg.read,_path(self.path),8192)
@@ -216,12 +213,12 @@ class AttrSetMsg(Message):
     """write an OWFS value"""
     timeout = 1
 
-    def __init__(self,path,value):
+    def __init__(self,*path,value):
         assert path is not None
         self.path = path
         self.value = value
-        val = str(val).encode("utf-8")
-        super().__init__(OWMsg.write,_path(self.path)+val.encode('utf-8'),len(val))
+        value = str(value).encode("utf-8")
+        super().__init__(OWMsg.write,_path(self.path)+value,len(value))
 
 class DirMsg(Message):
     """Read an owfs directory"""
@@ -244,7 +241,4 @@ class DirMsg(Message):
                 entry = entry[s+1:]
             res.append(entry)
         return res
-
-    def _check(self, cmd, data):
-        super()._check(cmd, data+b'\0')
 

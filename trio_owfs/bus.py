@@ -84,3 +84,14 @@ class Bus:
 
     async def scan(self):
         pass
+
+    async def attr_get(self, *attr):
+        """Read this attribute"""
+        return await self.server.attr_get(*(self.path + attr))
+
+    async def attr_set(self, *attr, value):
+        """Write this attribute"""
+        if self.server is None:
+            raise NoLocationKnown(self)
+        return await self.server.attr_set(*(self.path + attr), value=value)
+

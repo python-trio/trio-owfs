@@ -1,9 +1,12 @@
 import trio
 import pytest
-from .mock_server import server, EventChecker
-from trio_owfs.protocol import NOPMsg, DirMsg
-from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered,DeviceAdded,DeviceLocated,DeviceNotFound,BusAdded_Path,BusAdded
 from copy import deepcopy
+
+from trio_owfs.protocol import NOPMsg, DirMsg,AttrGetMsg,AttrSetMsg
+from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered,DeviceAdded,DeviceLocated,DeviceNotFound,BusAdded_Path,BusAdded
+from trio_owfs.bus import Bus
+
+from .mock_server import server, EventChecker
 
 # We can just use 'async def test_*' to define async tests.
 # This also uses a virtual clock fixture, so time passes quickly and
@@ -185,6 +188,9 @@ async def test_basic_server():
         NOPMsg(),
         DirMsg(()),
         DirMsg(("bus.0",)),
+        AttrGetMsg("bus.0","10.345678.90","temperature"),
+        AttrSetMsg("bus.0","10.345678.90","temperature", value=98.25),
+        AttrGetMsg("bus.0","10.345678.90","temperature"),
     ]
     e1 = EventChecker([
         ServerRegistered,
@@ -197,6 +203,12 @@ async def test_basic_server():
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
         await trio.sleep(0)
+        dev = ow.get_device("10.345678.90")
+        assert dev.bus == ('bus.0',)
+        assert isinstance(dev.bus,Bus)
+        assert float(await dev.attr_get("temperature")) == 12.5
+        await dev.attr_set("temperature", value=98.25)
+        assert float(await dev.attr_get("temperature")) == 98.25
 
 async def test_coupler_server():
     msgs = [

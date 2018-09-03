@@ -78,6 +78,7 @@ async def some_server(tree, msgs, options, socket):
             if command == OWMsg.nop:
                 await rdr.write(0,format_flags,0)
             elif command == OWMsg.dirall:
+                data = data.rstrip(b'\0')
                 subtree = tree
                 path = []
                 for k in data.split(b'/'):
@@ -96,6 +97,32 @@ async def some_server(tree, msgs, options, socket):
                     path = b'/'
                 data = b','.join(path+k for k in res)
                 await rdr.write(0,format_flags,len(data),data+b'\0')
+            elif command == OWMsg.read:
+                data = data.rstrip(b'\0')
+                res = tree
+                for k in data.split(b'/'):
+                    if k == b'':
+                        continue
+                    k = k.decode("utf-8")
+                    res = res[k]
+                assert not isinstance(res,dict)
+                res = res.encode('utf-8')
+                await rdr.write(0,format_flags,len(res),res+b'\0')
+            elif command == OWMsg.write:
+                val = data[-offset:].decode("utf-8")
+                data = data[:-offset]
+                data = data.rstrip(b'\0')
+                res = tree
+                last = None
+                for k in data.split(b'/'):
+                    if k == b'':
+                        continue
+                    if last is not None:
+                        res = res[last]
+                    last = k.decode("utf-8")
+                assert last is not None
+                res[last] = val
+                await rdr.write(0,format_flags,0)
             else:
                 raise RuntimeError("Unknown command: %d %x %s %d" % (command, format_flags, repr(data), offset))
 

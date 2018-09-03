@@ -87,15 +87,15 @@ class Device:
 
     async def attr_get(self, *attr):
         """Read this attribute"""
-        if self.server is None:
+        if self.bus is None:
             raise NoLocationKnown(self)
-        return await self.server.attr_get(self.bus.path + (self.id,) + attr)
+        return await self.bus.attr_get(*((self.id,) + attr))
 
     async def attr_set(self, *attr, value):
         """Write this attribute"""
-        if self.server is None:
+        if self.bus is None:
             raise NoLocationKnown(self)
-        return await self.server.attr_set(self.bus.path + (self.id,) + attr, value)
+        return await self.bus.attr_set(*((self.id,) + attr), value=value)
 
 @register
 class SwitchDevice(Device):

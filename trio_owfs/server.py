@@ -252,8 +252,8 @@ class Server:
         self._scan_task = await self.service.add_task(self._scan, interval)
 
     async def attr_get(self, *path):
-        return await self.chat(AttrGetMsg(path))
+        return await self.chat(AttrGetMsg(*path))
 
     async def attr_set(self, *path, value):
-        return await self.chat(AttrSetMsg(path, value))
+        return await self.chat(AttrSetMsg(*path, value=value))
 
