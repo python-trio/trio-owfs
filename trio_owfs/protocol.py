@@ -165,8 +165,10 @@ class Message:
 
     def process_reply(self, res, data):
         logger.debug("PROCESS %s %s %s",self,res,data)
-        if res != 0:
+        if res < 0:
             raise RuntimeError("Result for %s is %d (%s)!" % (repr(self), res, repr(data)))
+        elif res > 0:
+            assert len(data) == res, (data,res)
         data = self._process(data)
         if data is not None:
             self.event.set(data)
