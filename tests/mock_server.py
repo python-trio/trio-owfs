@@ -21,6 +21,8 @@ async def _schk(v):
     v[0] += 1
     if v[0] >= len(v):
         v[0] = 1
+    if v[v[0]] > 0:
+        logger.debug("Slow reply %s",v[v[0]])
     await trio.sleep(v[v[0]])
 
 async def some_server(tree, msgs, options, socket):
@@ -64,7 +66,8 @@ async def some_server(tree, msgs, options, socket):
                 try:
                     m = next(msgs)
                 except StopIteration:
-                    raise RuntimeError("Unexpected command: %d %x %s %d" % (command, format_flags, repr(data), offset)) from None
+                    raise RuntimeError("Unexpected command %d/%d: %d %x %s %d" % (midx,mpos,command, format_flags, repr(data), offset)) from None
+                mpos += 1
                 try:
                     m._check(command, data)
                 except Exception:
@@ -96,6 +99,8 @@ async def some_server(tree, msgs, options, socket):
             else:
                 raise RuntimeError("Unknown command: %d %x %s %d" % (command, format_flags, repr(data), offset))
 
+        _end(msgs)
+    except trio.BrokenStreamError:
         _end(msgs)
     finally:
         logger.debug("END Server")
@@ -154,8 +159,10 @@ async def server(tree={}, msgs=(), options={}, events=None):
 
                 s = await ow.add_server(*addr)
                 await s.scan_done
+                ow.test_server = s
                 yield ow
             finally:
+                ow.test_server = None
                 if s is not None:
                     await s.drop()
                 ow.push_event(None)

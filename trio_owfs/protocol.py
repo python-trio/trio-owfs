@@ -128,6 +128,7 @@ class MessageProtocol:
 
 class Message:
     timeout = 0.5
+    cancelled = False
 
     def __init__(self,typ,data,rlen):
         #self.persist = persist
@@ -136,6 +137,9 @@ class Message:
         self.rlen = rlen
         self.event = ValueEvent()
         
+    def cancel(self):
+        self.cancelled = True
+
     async def write(self, protocol):
         """Send an OWFS message to the other end of the connection.
         """

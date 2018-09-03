@@ -61,7 +61,7 @@ class Bus:
             self.add_device(dev)
             for b in dev.buses():
                 buses.add(b)
-                bus = self.server.get_bus(b)
+                bus = self.server.get_bus(*b)
                 buses.update(await bus._scan_one())
 
         for d in old_devs:

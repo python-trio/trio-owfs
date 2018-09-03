@@ -27,6 +27,7 @@ class Server:
         self._msg_proto = None
         self.requests = deque()
         self._wlock = trio.Lock()
+        self._connect_lock = trio.Lock()
         self._wqueue = trio.Queue(10)
         self._wmsg = None
         self._scan_task = None
@@ -38,7 +39,7 @@ class Server:
     def scan_done(self):
         return self._scan_done.wait()
 
-    def get_bus(self, path):
+    def get_bus(self, *path):
         """Return the bus at this path. Allocate new if not existing."""
         try:
             return self._buses[path]
@@ -62,11 +63,12 @@ class Server:
                 it = self._msg_proto.__aiter__()
                 while True:
                     try:
-                        res,data = await it.__anext__()
+                        with trio.fail_after(15):
+                            res,data = await it.__anext__()
                     except ServerBusy as exc:
                         msg = self.requests.popleft()
                         msg.process_error(exc)
-                    except StopAsyncIteration:
+                    except (StopAsyncIteration,trio.TooSlowError):
                         await self._reconnect(from_reader=True)
                         break
                     else:
@@ -76,30 +78,38 @@ class Server:
                             self.requests.appendleft(msg)
 
     async def _reconnect(self, from_reader=False):
-        self.service.push_event(ServerDisconnected(self))
-        self._write_scope.cancel()
-        self._write_scope = None
-        if not from_reader:
-            self._read_scope.cancel()
-            self._read_scope = None
-        await self.stream.aclose()
-        backoff = 0.5
-        while True:
-            try:
-                self.stream = await trio.open_tcp_stream(self.host, self.port)
-            except OSError:
-                await trio.sleep(backoff)
-                if backoff < 10:
-                    backoff *= 1.5
-            else:
-                self._msg_proto = MessageProtocol(self.stream, is_server=False)
-                for msg in list(self.requests):
-                    await msg.write(self._msg_proto)
-                self.service.push_event(ServerConnected(self))
-                self._write_scope = await self.service.nursery.start(self._writer)
-                if not from_reader:
-                    self._read_scope = await self.service.nursery.start(self._reader)
+        if self._connect_lock.locked():
+            async with self._connect_lock:
                 return
+        async with self._connect_lock:
+            self.service.push_event(ServerDisconnected(self))
+            self._write_scope.cancel()
+            self._write_scope = None
+            if not from_reader:
+                self._read_scope.cancel()
+                self._read_scope = None
+            await self.stream.aclose()
+            backoff = 0.5
+            while True:
+                try:
+                    self.stream = await trio.open_tcp_stream(self.host, self.port)
+                except OSError:
+                    await trio.sleep(backoff)
+                    if backoff < 10:
+                        backoff *= 1.5
+                else:
+                    self._msg_proto = MessageProtocol(self.stream, is_server=False)
+                    # re-send messages, but skip those that have been cancelled
+                    ml,self.requests = list(self.requests),deque()
+                    for msg in ml:
+                        if not msg.cancelled:
+                            self.requests.append(msg)
+                            await msg.write(self._msg_proto)
+                    self.service.push_event(ServerConnected(self))
+                    self._write_scope = await self.service.nursery.start(self._writer)
+                    if not from_reader:
+                        self._read_scope = await self.service.nursery.start(self._reader)
+                    return
 
     async def start(self):
         """Start talking. Returns when the connection is established,
@@ -108,13 +118,14 @@ class Server:
         TODO: if the connection subsequently drops, it's re-established
         transparently.
         """
-        if self.stream is not None:
-            raise RuntimeError("already open")
-        self.stream = await trio.open_tcp_stream(self.host, self.port)
-        self._msg_proto = MessageProtocol(self.stream, is_server=False)
-        self.service.push_event(ServerConnected(self))
-        self._write_scope = await self.service.nursery.start(self._writer)
-        self._read_scope = await self.service.nursery.start(self._reader)
+        async with self._connect_lock:
+            if self.stream is not None:
+                raise RuntimeError("already open")
+            self.stream = await trio.open_tcp_stream(self.host, self.port)
+            self._msg_proto = MessageProtocol(self.stream, is_server=False)
+            self.service.push_event(ServerConnected(self))
+            self._write_scope = await self.service.nursery.start(self._writer)
+            self._read_scope = await self.service.nursery.start(self._reader)
         try:
             await self.chat(NOPMsg(), fail=True)
         except BaseException:
@@ -124,23 +135,23 @@ class Server:
     async def chat(self, msg, fail=False):
         backoff = 0.1
         await self._wqueue.put(msg)
-        while True:
-            try:
-                with trio.fail_after(3):
-                    return await msg.get_reply()
-            except trio.TooSlowError:
-                if fail:
-                    raise
-                await self._reconnect()
-            except ServerBusy:
-                await trio.sleep(backoff)
-                if backoff < 2:
-                    backoff *= 1.5
-                msg._resubmit()
-                await self._wqueue.put(msg)
-            except Retry:
-                # The message has been repeated.
-                pass
+        try:
+            while True:
+                try:
+                    res = await msg.get_reply()
+                    return res
+                except ServerBusy:
+                    await trio.sleep(backoff)
+                    if backoff < 2:
+                        backoff *= 1.5
+                    msg._resubmit()
+                    await self._wqueue.put(msg)
+                except Retry:
+                    # The message has been repeated.
+                    pass
+        except BaseException:
+            msg.cancel()
+            raise
 
     async def _writer(self, task_status=trio.TASK_STATUS_IGNORED):
         with trio.open_cancel_scope() as scope:
@@ -159,6 +170,9 @@ class Server:
                 except trio.ClosedResourceError:
                     # will get restarted by .reconnect()
                     return
+                except trio.BrokenStreamError:
+                    await self.stream.aclose()
+                    return # wil be restarted by the reader
                 else:
                     self.requests.append(self._wmsg)
                     self._wmsg = None
@@ -216,10 +230,7 @@ class Server:
         old_paths = set()
         for d in await self.dir():
             if d.startswith("bus."):
-                bus = self._buses.get(d, None)
-                if bus is None:
-                    bus = Bus(self, d)
-                    self._buses[d] = bus
+                bus = self.get_bus(d)
                 bus._unseen = 0
                 try:
                     old_paths.remove(d)
