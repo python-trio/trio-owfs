@@ -101,9 +101,9 @@ class Device:
 class SwitchDevice(Device):
     family = 0x1F
     def buses(self):
-        b = set()
-        b.add(self.bus.path+(self.id,"main"))
-        b.add(self.bus.path+(self.id,"aux"))
+        b = []
+        b.append(self.bus.path+(self.id,"main"))
+        b.append(self.bus.path+(self.id,"aux"))
         return b
 
     def delocate(self):

@@ -18,6 +18,27 @@ basic_tree = {
         }
     }
 
+coupler_tree = {
+        "bus.0": {
+            "10.345678.90": {
+                "whatever": "hello",
+                "temperature": "12.5",
+            },
+            "1F.ABCDEF.F1": {
+                "main": {
+                    "20.222222.22": {
+                        "some":"chip",
+                    },
+                },
+                "aux": {
+                    "28.282828.28": {
+                        "another":"chip",
+                    },
+                },
+            }
+        }
+    }
+
 async def test_empty_server():
     msgs = [
         NOPMsg(),
@@ -175,6 +196,34 @@ async def test_basic_server():
         ServerDeregistered,
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
+        await trio.sleep(0)
+
+async def test_coupler_server():
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+        DirMsg(("bus.0",)),
+        DirMsg(("bus.0","1F.ABCDEF.F1","main")),
+        DirMsg(("bus.0","1F.ABCDEF.F1","aux")),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        BusAdded_Path("bus.0"),
+        DeviceAdded("10.345678.90"),
+        DeviceLocated("10.345678.90"),
+        DeviceAdded("1F.ABCDEF.F1"),
+        DeviceLocated("1F.ABCDEF.F1"),
+        BusAdded_Path("bus.0","1F.ABCDEF.F1","main"),
+        DeviceAdded("20.222222.22"),
+        DeviceLocated("20.222222.22"),
+        BusAdded_Path("bus.0","1F.ABCDEF.F1","aux"),
+        DeviceAdded("28.282828.28"),
+        DeviceLocated("28.282828.28"),
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    async with server(msgs=msgs, events=e1, tree=coupler_tree) as ow:
         await trio.sleep(0)
 
 async def test_wrong_bus():

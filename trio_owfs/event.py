@@ -45,6 +45,8 @@ class BusAdded_Path:
     """Not an event. Used for storing the bus path for comparisons in tests."""
     def __init__(self, *path):
         self.path = path
+    def __repr__(self):
+        return "<%s: %s>" % (self.__class__.__name__,'/'.join(self.path))
     def __eq__(self,x):
         if isinstance(x,BusAdded_Path):
             x=x.path
