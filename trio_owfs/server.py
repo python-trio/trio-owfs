@@ -67,7 +67,7 @@ class Server:
                         msg = self.requests.popleft()
                         msg.process_error(exc)
                     except StopAsyncIteration:
-                        await self._reconnect()
+                        await self._reconnect(from_reader=True)
                         break
                     else:
                         msg = self.requests.popleft()
@@ -75,10 +75,13 @@ class Server:
                         if not msg.done():
                             self.requests.appendleft(msg)
 
-    async def _reconnect(self):
+    async def _reconnect(self, from_reader=False):
         self.service.push_event(ServerDisconnected(self))
         self._write_scope.cancel()
         self._write_scope = None
+        if not from_reader:
+            self._read_scope.cancel()
+            self._read_scope = None
         await self.stream.aclose()
         backoff = 0.5
         while True:
@@ -94,6 +97,8 @@ class Server:
                     await msg.write(self._msg_proto)
                 self.service.push_event(ServerConnected(self))
                 self._write_scope = await self.service.nursery.start(self._writer)
+                if not from_reader:
+                    self._read_scope = await self.service.nursery.start(self._reader)
                 return
 
     async def start(self):
@@ -111,18 +116,22 @@ class Server:
         self._write_scope = await self.service.nursery.start(self._writer)
         self._read_scope = await self.service.nursery.start(self._reader)
         try:
-            await self.chat(NOPMsg())
+            await self.chat(NOPMsg(), fail=True)
         except BaseException:
-            self._read_scope.cancel()
             await self.aclose()
             raise
 
-    async def chat(self, msg):
+    async def chat(self, msg, fail=False):
         backoff = 0.1
         await self._wqueue.put(msg)
         while True:
             try:
-                return await msg.get_reply()
+                with trio.fail_after(3):
+                    return await msg.get_reply()
+            except trio.TooSlowError:
+                if fail:
+                    raise
+                await self._reconnect()
             except ServerBusy:
                 await trio.sleep(backoff)
                 if backoff < 2:

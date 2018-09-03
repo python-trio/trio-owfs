@@ -15,6 +15,14 @@ def _chk(v):
         v[0] = 1
     return v[v[0]]
 
+async def _schk(v):
+    if v is None:
+        return
+    v[0] += 1
+    if v[0] >= len(v):
+        v[0] = 1
+    await trio.sleep(v[v[0]])
+
 async def some_server(tree, msgs, options, socket):
     rdr = MessageProtocol(socket, is_server=True)
     logger.debug("START Server")
@@ -42,11 +50,13 @@ async def some_server(tree, msgs, options, socket):
 
     each_busy = options.get("busy_every",None)
     each_close = options.get("close_every",None)
+    each_slow = options.get("slow_every",None)
     try:
         if _chk(each_close):
             _end(msgs)
             return
         async for command, format_flags, data, offset in rdr:
+            await _schk(each_slow)
             if _chk(each_busy):
                 await rdr.write(0,format_flags,0, data=None)
                 continue
@@ -105,6 +115,8 @@ class EventChecker:
                 async for e in ev:
                     logger.debug("Event %s",e)
                     self.check_next(e)
+        except RuntimeError:
+            raise
         except Exception as exc:
             self.check_last()
         else:
@@ -126,7 +138,8 @@ class EventChecker:
 
     def check_last(self):
         logger.debug("Event END")
-        assert self.pos == len(self.events), (self.pos,self.events[self.pos])
+        if self.pos != len(self.events):
+            raise RuntimeError("Superfluous event #%d: %s" % (self.pos, self.events[self.pos]))
 
 @asynccontextmanager
 async def server(tree={}, msgs=(), options={}, events=None):
@@ -145,6 +158,7 @@ async def server(tree={}, msgs=(), options={}, events=None):
             finally:
                 if s is not None:
                     await s.drop()
+                ow.push_event(None)
                 await trio.sleep(0.1)
                 n.cancel_scope.cancel()
 

@@ -32,6 +32,54 @@ async def test_empty_server():
     async with server(msgs=msgs, events=e1) as ow:
         await trio.sleep(0)
 
+async def test_missing_event():
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+    ])
+    with pytest.raises(RuntimeError) as r:
+        async with server(msgs=msgs, events=e1) as ow:
+            await trio.sleep(0)
+    assert "Unexpected event " in r.value.args[0]
+
+async def test_more_event():
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerDeregistered,
+        ServerDeregistered,
+    ])
+    with pytest.raises(RuntimeError) as r:
+        async with server(msgs=msgs, events=e1) as ow:
+            await trio.sleep(0)
+    assert "Superfluous event " in r.value.args[0]
+
+async def test_bad_event():
+    msgs = [
+        NOPMsg(),
+        DirMsg(()),
+    ]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerConnected,
+        ServerDeregistered,
+    ])
+    with pytest.raises(RuntimeError) as r:
+        async with server(msgs=msgs, events=e1) as ow:
+            await trio.sleep(0)
+    assert ": Want " in r.value.args[0]
+
 async def test_wrong_msg():
     msgs = [
         NOPMsg(),
@@ -110,6 +158,32 @@ async def test_basic_server():
         ServerDeregistered,
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
+        await trio.sleep(0)
+
+async def test_slow_server(mock_clock):
+    mock_clock.autojump_threshold = 0.1
+    msgs = [[
+        NOPMsg(),
+        DirMsg(()),
+    ],[
+        DirMsg(()),
+        DirMsg(("bus.0",)),
+    ],[
+        DirMsg(("bus.0",)),
+    ]]
+    e1 = EventChecker([
+        ServerRegistered,
+        ServerConnected,
+        ServerDisconnected,
+        ServerConnected,
+        ServerDisconnected,
+        ServerConnected,
+        DeviceAdded("10.345678.90"),
+        DeviceLocated("10.345678.90"),
+        ServerDisconnected,
+        ServerDeregistered,
+    ])
+    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'slow_every':[0,0,10]}) as ow:
         await trio.sleep(0)
 
 async def test_busy_server():

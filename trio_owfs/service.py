@@ -141,11 +141,16 @@ class Service:
             def __exit__(slf, *tb):
                 if tb[1] is None:
                     assert self._event_queue.is_empty()
+                self._event_queue.put_nowait(None)
                 self._event_queue = None
             def __aiter__(slf):
                 return slf
             async def __anext__(slf):
-                return await self._event_queue.get()
+                res = await self._event_queue.get()
+                if res is None:
+                    raise StopAsyncIteration
+                return res
+
 
         return EventWrapper()
 
@@ -155,7 +160,10 @@ class Service:
         return self
 
     async def __anext__(self):
-        return await self._event_queue.get()
+        res = await self._event_queue.get()
+        if res is None:
+            raise StopAsyncIteration
+        return res
 
 @asynccontextmanager
 async def OWFS(**kwargs):
