@@ -35,16 +35,25 @@ class Device:
 
     A device may or may not have a known location.
     """
+    _did_setup = False
 
     def __init__(self, service, id):
         logger.debug("NewDev %s",id)
 
     def __new__(cls, service, id):
-        family, code, chksum = split_id(id)
-        self = object.__new__(dev_classes.get(family, Device))
+        family_id, code, chksum = split_id(id)
+
+        cls = dev_classes.get(family_id)
+        if cls is None:
+            class cls(Device):
+                family = family_id
+            cls.__name__ = "Device_%02x" % (family_id,)
+            dev_classes[family_id] = cls
+
+        self = object.__new__(cls)
 
         self.id = id.upper()
-        self.family = family
+        self.family = family_id
         self.code = code
         self.chksum = chksum
 
@@ -54,6 +63,71 @@ class Device:
         self._unseen = 0
 
         return self
+
+    @classmethod
+    async def setup_struct(cls, server):
+        """Read the device's structural data from OWFS
+        and add methods to access the fields"""
+
+        @attr.s
+        class SimpleGetter:
+            name = attr.ib()
+            typ = attr.ib()
+
+            async def __get__(slf, self, cls):
+                res = await self.attr_get(slf.name)
+                if slf.typ in {'f','g','p','t'}:
+                    res = float(res)
+                elif slf.typ in {'i','u'}:
+                    res = int(res)
+                elif slf.typ == 'y':
+                    res = bool(int(res))
+                elif slf.typ == 'b':
+                    pass
+                else:
+                    res = res.decode('utf-8')
+                return res
+
+        @attr.s
+        class SimpleSetter:
+            name = attr.ib()
+            typ = attr.ib()
+
+            def __get__(slf, self, cls):
+                async def setter(self, typ, name, val):
+                    if typ == 'b':
+                        pass
+                    elif typ == 'y':
+                        val = b'1' if val else b'0'
+                    else:
+                        val = str(val).encode("utf-8")
+                    await self.attr_set(name, value=val)
+                return partial(setter, self, slf.name, slf.typ)
+
+        if cls._did_setup is not False:
+            return
+        cls._did_setup = None
+            
+        try:
+            fc = "%02X"%(cls.family)
+            for d in await server.dir("structure",fc):
+                try:
+                    v = await server.attr_get("structure",fc,d)
+                    v = v.decode("utf-8").split(",")
+                    if v[3] in {'ro','rw'}:
+                        setattr(cls, d, SimpleGetter(d,v[0]))
+                    if v[3] in {'wo','rw'}:
+                        setattr(cls, 'set'+d, SimpleSetter(d,v[0]))
+                except Exception:
+                    raise
+
+
+        except BaseException:
+            cls._did_setup = False
+            raise
+        else:
+            cls._did_setup = True
+
 
     def __eq__(self, x):
         x = getattr(x,'id',x)
