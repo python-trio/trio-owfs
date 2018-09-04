@@ -106,13 +106,6 @@ class SwitchDevice(Device):
         b.append(self.bus.path+(self.id,"aux"))
         return b
 
-    def delocate(self):
-        s = self.bus.server
-        for b in self.buses():
-            b = s._buses[b]
-            b.delocate()
-        super().delocate(self)
-
 @register
 class TemperatureDevice(Device):
     family = 0x10

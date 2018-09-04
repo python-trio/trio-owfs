@@ -33,13 +33,13 @@ class Bus:
         """The bus can no longer be found"""
         if self._buses:
             for b in list(self._buses.values()):
-                self.service.delocate(b)
+                b.delocate()
             self._buses = None
         if self._devices:
             for d in list(self._devices.values()):
-                d.delocate(self)
+                d.delocate(bus=self)
             self._devices = None
-        self.service._del_bus(self)
+        self.server._del_bus(self)
 
     async def _scan_one(self):
         buses = set()
