@@ -4,10 +4,9 @@ Access to an owserver.
 
 import trio
 from collections import deque
-import struct
 
 from .event import ServerConnected, ServerDisconnected
-from .event import BusAdded, BusDeleted
+from .event import BusAdded
 from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg, MessageProtocol, ServerBusy, Retry
 from .bus import Bus
 
@@ -115,7 +114,7 @@ class Server:
     async def start(self):
         """Start talking. Returns when the connection is established,
         raises an error if not possible.
-        
+
         TODO: if the connection subsequently drops, it's re-established
         transparently.
         """
@@ -160,7 +159,6 @@ class Server:
     async def _writer(self, task_status=trio.TASK_STATUS_IGNORED):
         with trio.open_cancel_scope() as scope:
             task_status.started(scope)
-            backoff = 0.1
             while True:
                 if self._wmsg is None:
                     try:

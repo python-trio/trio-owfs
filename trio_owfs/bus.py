@@ -2,7 +2,7 @@
 Buses.
 """
 
-from .device import Device, NotADevice, split_id
+from .device import NotADevice, split_id, NoLocationKnown
 from .event import BusAdded, BusDeleted
 
 import logging
@@ -65,7 +65,7 @@ class Bus:
         old_devs = set(self._devices.keys())
         for d in res:
             try:
-                ids = split_id(d)
+                split_id(d)  # only tests for conformity
             except NotADevice as err:
                 logger.debug("Not a device: %s", err)
                 continue

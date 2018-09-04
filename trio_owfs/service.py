@@ -2,10 +2,9 @@
 
 import trio
 from async_generator import asynccontextmanager
-import typing as typ
 
 from .server import Server
-from .device import Device, dev_classes
+from .device import Device
 from .event import ServerRegistered, ServerDeregistered
 from .event import DeviceAdded, DeviceDeleted
 
@@ -19,7 +18,7 @@ class Service:
     """\
         This is the master class you use for communicating with OWFS.
         You typically start it thus::
-            
+
             async def rdr(ow):
                 async for evt in ow:
                     process(evt)
@@ -34,8 +33,7 @@ class Service:
                 0: only after connecting
                 None: do not scan
 
-        
-        NB: trio-OWFS is opinionated. Device codes will contain checksums, 
+        NB: trio-OWFS is opinionated. Device codes will contain checksums,
         temperature is in degC, pressure is in mbar.
         """
 
@@ -122,7 +120,7 @@ class Service:
 
     def _del_device(self, d):
         self._devices.remove(d)
-        self.push_event(DeviceDeleted(s))
+        self.push_event(DeviceDeleted(d))
 
     # context
 

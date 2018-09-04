@@ -3,7 +3,9 @@ import pytest
 from copy import deepcopy
 
 from trio_owfs.protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg
-from trio_owfs.event import ServerRegistered, ServerConnected, ServerDisconnected, ServerDeregistered, DeviceAdded, DeviceLocated, DeviceNotFound, BusAdded_Path, BusAdded, BusDeleted
+from trio_owfs.event import ServerRegistered, ServerConnected, ServerDisconnected, \
+    ServerDeregistered, DeviceAdded, DeviceLocated, DeviceNotFound, BusAdded_Path, \
+    BusAdded, BusDeleted
 from trio_owfs.bus import Bus
 
 from .mock_server import server, EventChecker
@@ -89,7 +91,7 @@ async def test_empty_server():
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1) as ow:
+    async with server(msgs=msgs, events=e1):  # as ow:
         await trio.sleep(0)
 
 
@@ -108,7 +110,7 @@ async def test_send_idle(mock_clock):
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1) as ow:
+    async with server(msgs=msgs, events=e1):  # as ow:
         await trio.sleep(15)
 
 
@@ -123,7 +125,7 @@ async def test_missing_event():
         ServerDisconnected,
     ])
     with pytest.raises(RuntimeError) as r:
-        async with server(msgs=msgs, events=e1) as ow:
+        async with server(msgs=msgs, events=e1):  # as ow:
             await trio.sleep(0)
     assert "Unexpected event " in r.value.args[0]
 
@@ -143,7 +145,7 @@ async def test_more_event():
         ]
     )
     with pytest.raises(RuntimeError) as r:
-        async with server(msgs=msgs, events=e1) as ow:
+        async with server(msgs=msgs, events=e1):  # as ow:
             await trio.sleep(0)
     assert "Superfluous event " in r.value.args[0]
 
@@ -160,7 +162,7 @@ async def test_bad_event():
         ServerDeregistered,
     ])
     with pytest.raises(RuntimeError) as r:
-        async with server(msgs=msgs, events=e1) as ow:
+        async with server(msgs=msgs, events=e1):  # as ow:
             await trio.sleep(0)
     assert "Wrong event: want " in r.value.args[0]
 
@@ -179,7 +181,7 @@ async def test_wrong_msg():
         ]
     )
     with pytest.raises(RuntimeError) as r:
-        async with server(msgs=msgs, events=e1) as ow:
+        async with server(msgs=msgs, events=e1):  # as ow:
             await trio.sleep(0)
     assert " wrong seen " in r.value.args[0]
 
@@ -198,7 +200,7 @@ async def test_wrong_msg_2():
         ]
     )
     with pytest.raises(RuntimeError) as r:
-        async with server(msgs=msgs, events=e1) as ow:
+        async with server(msgs=msgs, events=e1):  # as ow:
             await trio.sleep(0)
     assert " wrong seen " in r.value.args[0]
 
@@ -213,7 +215,7 @@ async def test_missing_msg():
         ServerDisconnected,
     ])
     with pytest.raises(RuntimeError) as r:
-        async with server(msgs=msgs, events=e1) as ow:
+        async with server(msgs=msgs, events=e1):  # as ow:
             await trio.sleep(0)
     assert "Unexpected command " in r.value.args[0]
 
@@ -233,7 +235,7 @@ async def test_more_msg():
         ]
     )
     with pytest.raises(RuntimeError) as r:
-        async with server(msgs=msgs, events=e1) as ow:
+        async with server(msgs=msgs, events=e1):  # as ow:
             await trio.sleep(0)
     assert " not seen " in r.value.args[0]
 
@@ -334,7 +336,7 @@ async def test_coupler_server():
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1, tree=coupler_tree) as ow:
+    async with server(msgs=msgs, events=e1, tree=coupler_tree):  # as ow:
         await trio.sleep(0)
 
 
@@ -356,7 +358,7 @@ async def test_wrong_bus():
         ]
     )
     with pytest.raises(RuntimeError) as r:
-        async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
+        async with server(msgs=msgs, events=e1, tree=basic_tree):  # as ow:
             await trio.sleep(0)
     assert "Wrong event: want " in r.value.args[0]
 
@@ -397,8 +399,8 @@ async def test_slow_server(mock_clock):
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'slow_every': [0, 0, 15, 0,
-                                                                                     0]}) as ow:
+    async with server(msgs=msgs, events=e1, tree=basic_tree,
+                      options={'slow_every': [0, 0, 15, 0, 0]}):  # as ow:
         await trio.sleep(0)
 
 
@@ -421,11 +423,9 @@ async def test_busy_server():
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'busy_every': [0, 0,
-                                                                                     1]}) as ow:
+    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'busy_every': [0, 0, 1]}):
         await trio.sleep(0)
-    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'busy_every': [1, 0,
-                                                                                     1]}) as ow:
+    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'busy_every': [1, 0, 1]}):
         await trio.sleep(0)
 
 
@@ -456,8 +456,8 @@ async def test_disconnecting_server():
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'close_every': [0, 0, 0,
-                                                                                      1]}) as ow:
+    async with server(msgs=msgs, events=e1, tree=basic_tree,
+                      options={'close_every': [0, 0, 0, 1]}):  # as ow:
         await trio.sleep(0)
 
 
@@ -491,8 +491,8 @@ async def test_disconnecting_server_2(mock_clock):
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1, tree=basic_tree, options={'close_every': [0, 1, 0,
-                                                                                      0]}) as ow:
+    async with server(msgs=msgs, events=e1, tree=basic_tree,
+                      options={'close_every': [0, 1, 0, 0]}):  # as ow:
         await trio.sleep(0)
 
 
@@ -589,7 +589,7 @@ async def test_manual_bus(mock_clock):
     mock_clock.autojump_threshold = 0.1
     msgs = [
         NOPMsg(),
-        DirMsg(()),
+        AttrGetMsg("bus.0", "10.345678.90", "temperature"),
         NOPMsg(),
         DirMsg(()),
         DirMsg(("bus.0",)),
@@ -599,10 +599,9 @@ async def test_manual_bus(mock_clock):
             ServerRegistered,
             ServerConnected,
             BusAdded_Path("bus.0"),
-            Checkpoint,
-            Checkpoint,
             DeviceAdded("10.345678.90"),
             DeviceLocated("10.345678.90"),
+            Checkpoint,
             Checkpoint,
             ServerDisconnected,
             DeviceNotFound("10.345678.90"),
@@ -612,13 +611,19 @@ async def test_manual_bus(mock_clock):
     )
     my_tree = deepcopy(basic_tree)
     entry = my_tree.pop('bus.0')
-    async with server(msgs=msgs, events=e1, tree=my_tree) as ow:
+    async with server(msgs=msgs, events=e1, tree=my_tree, scan=None) as ow:
         bus = ow.test_server.get_bus('bus.0')
+        assert bus.server == ow.test_server
+
+        dev = ow.get_device('10.345678.90')
+        assert dev.bus is None
+
+        dev.locate(bus)
+        assert float(await dev.attr_get("temperature")) == 12.5
+
         ow.push_event(Checkpoint())
         await trio.sleep(15)
         ow.push_event(Checkpoint())
         my_tree['bus.0'] = entry
         await ow.scan_now()
         ow.push_event(Checkpoint())
-        dev = ow.get_device('10.345678.90')
-        assert dev.bus is not None

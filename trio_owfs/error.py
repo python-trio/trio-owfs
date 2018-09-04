@@ -3,8 +3,6 @@
 # and 'enum msg_classification' from module/owlib/src/include/ow_message.h
 
 import attr
-import struct
-from .util import ValueEvent
 
 import logging
 logger = logging.getLogger(__name__)
@@ -151,7 +149,7 @@ class NoEntryError(OWFSReplyError_):
 
 @_register
 @attr.s(cmp=False)
-class NoMemoryError(OWFSReplyError_):
+class NoFreeMemoryError(OWFSReplyError_):
     err = 12
 
 

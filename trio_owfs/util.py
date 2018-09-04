@@ -1,8 +1,5 @@
 # utility code
 
-import operator
-from collections import deque, OrderedDict
-
 import attr
 import outcome
 

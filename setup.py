@@ -6,7 +6,7 @@ LONG_DESC = open("README.rst", encoding="utf-8").read()
 
 setup(
     name="trio-owfs",
-    version=__version__,
+    version=__version__,  # noqa: W291,F821
     description="Access to 1wire",
     url="https://github.com/python-trio/trio-owfs",
     long_description=LONG_DESC,

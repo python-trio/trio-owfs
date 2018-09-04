@@ -194,8 +194,8 @@ class EventChecker:
 
 
 @asynccontextmanager
-async def server(tree={}, msgs=(), options={}, events=None):
-    async with OWFS() as ow:
+async def server(tree={}, msgs=(), options={}, events=None, **kw):
+    async with OWFS(**kw) as ow:
         async with trio.open_nursery() as n:
             s = None
             try:
