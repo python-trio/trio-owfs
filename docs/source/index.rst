@@ -4,9 +4,9 @@
    contain the root `toctree` directive.
 
 
-=================================
-Onewire for Trio: Access to 1wire
-=================================
+===============================
+1wire for Trio: Access to 1wire
+===============================
 
 This project enables you to access one or more 1wire buses asynchronously.
 
@@ -18,9 +18,9 @@ Prerequisites:
 
 * any OWFS-compatible hardware
 
-+++++
-Usage
-+++++
++++++++++++
+Quick Usage
++++++++++++
 
 First, create an OWFS instance::
 
@@ -52,12 +52,14 @@ re-established until you leave the ``with OWFS()`` block, or call
 ``await s.aclose()``.
 
 Your event monitor receives a :class:`trio_owfs.event.DeviceLocated` event
-for each 1wire slave. You can also ask for a specific device ID::
+for each 1wire slave. You can also ask by device ID::
 
     dev = await ow.get_device("10.DBDB39010800.EF")
     # triggers a :class:`trio_owfs.event.DeviceAdded` event if not yet known
     if dev.bus is not None:
-        # we know where it is
+        # make sure that the data accessor methods are loaded
+        await ow.ensure_struct(dev)
+
         heat = await dev.temperature
         await dev.set_temphigh(99)
 
@@ -75,9 +77,11 @@ Future plans
 
 * support simultaneous temperature or voltage conversion (no bus delay)
 
-* support background polling
+* poll a device in the background
 
-* auto-discover device attributes by reading ``/structure``
+* auto-poll each bus's ``alert`` subdirectory
+
+* improve auto-discovery of device attributes by reading ``/structure``
 
 Non-plans
 +++++++++
