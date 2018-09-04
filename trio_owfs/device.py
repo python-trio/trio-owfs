@@ -110,3 +110,9 @@ class SwitchDevice(Device):
 class TemperatureDevice(Device):
     family = 0x10
 
+    async def stop_alarm(self):
+        t = await self.latesttemp
+        if t > (await self.temphigh):
+            await self.set_temphigh(int(t+2))
+        if t < (await self.templow):
+            await self.set_templow(int(t-1))
