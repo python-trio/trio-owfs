@@ -93,7 +93,7 @@ else
     mkdir empty
     cd empty
 
-    pytest -W error -ra -v --pyargs trio_owfs --cov=trio_owfs --cov-config=../.coveragerc --verbose
+    pytest -W error -ra -v --pyargs trio_owfs --cov=trio_owfs --cov-config=../.coveragerc --verbose ../tests
 
     bash <(curl -s https://codecov.io/bash)
 fi

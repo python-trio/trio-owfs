@@ -1,3 +1,4 @@
+trio
 pytest
 pytest-cov
 pytest-trio
