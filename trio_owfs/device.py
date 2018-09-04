@@ -12,24 +12,31 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["Device"]
 
+
 @attr.s
 class NoLocationKnown(RuntimeError):
     device = attr.ib()
+
 
 @attr.s
 class NotADevice(RuntimeError):
     id = attr.ib()
 
+
 dev_classes = dict()
+
+
 def register(cls):
     dev_classes[cls.family] = cls
 
+
 def split_id(id):
     try:
-        a,b,c = (int(x, 16) for x in id.split('.'))
+        a, b, c = (int(x, 16) for x in id.split('.'))
     except ValueError:
         raise NotADevice(id)
-    return a,b,c
+    return a, b, c
+
 
 class Device:
     """Base class for devices.
@@ -39,15 +46,17 @@ class Device:
     _did_setup = False
 
     def __init__(self, service, id):
-        logger.debug("NewDev %s",id)
+        logger.debug("NewDev %s", id)
 
     def __new__(cls, service, id):
         family_id, code, chksum = split_id(id)
 
         cls = dev_classes.get(family_id)
         if cls is None:
+
             class cls(Device):
                 family = family_id
+
             cls.__name__ = "Device_%02x" % (family_id,)
             dev_classes[family_id] = cls
 
@@ -77,9 +86,9 @@ class Device:
 
             async def __get__(slf, self, cls):
                 res = await self.attr_get(slf.name)
-                if slf.typ in {'f','g','p','t'}:
+                if slf.typ in {'f', 'g', 'p', 't'}:
                     res = float(res)
-                elif slf.typ in {'i','u'}:
+                elif slf.typ in {'i', 'u'}:
                     res = int(res)
                 elif slf.typ == 'y':
                     res = bool(int(res))
@@ -103,25 +112,25 @@ class Device:
                     else:
                         val = str(val).encode("utf-8")
                     await self.attr_set(name, value=val)
+
                 return partial(setter, self, slf.typ, slf.name)
 
         if cls._did_setup is not False:
             return
         cls._did_setup = None
-            
+
         try:
-            fc = "%02X"%(cls.family)
-            for d in await server.dir("structure",fc):
+            fc = "%02X" % (cls.family)
+            for d in await server.dir("structure", fc):
                 try:
-                    v = await server.attr_get("structure",fc,d)
+                    v = await server.attr_get("structure", fc, d)
                     v = v.decode("utf-8").split(",")
-                    if v[3] in {'ro','rw'}:
-                        setattr(cls, d, SimpleGetter(d,v[0]))
-                    if v[3] in {'wo','rw'}:
-                        setattr(cls, 'set_'+d, SimpleSetter(d,v[0]))
+                    if v[3] in {'ro', 'rw'}:
+                        setattr(cls, d, SimpleGetter(d, v[0]))
+                    if v[3] in {'wo', 'rw'}:
+                        setattr(cls, 'set_' + d, SimpleSetter(d, v[0]))
                 except Exception:
                     raise
-
 
         except BaseException:
             cls._did_setup = False
@@ -129,16 +138,15 @@ class Device:
         else:
             cls._did_setup = True
 
-
     def __eq__(self, x):
-        x = getattr(x,'id',x)
+        x = getattr(x, 'id', x)
         return self.id == x
 
     def __hash__(self):
         return hash(self.id)
 
     def __repr__(self):
-        return "<%s:%s @ %s>" % (self.__class__.__name__,self.id, self.bus)
+        return "<%s:%s @ %s>" % (self.__class__.__name__, self.id, self.bus)
 
     def buses(self):
         return set()
@@ -172,14 +180,17 @@ class Device:
             raise NoLocationKnown(self)
         return await self.bus.attr_set(*((self.id,) + attr), value=value)
 
+
 @register
 class SwitchDevice(Device):
     family = 0x1F
+
     def buses(self):
         b = []
-        b.append((self.id,"main"))
-        b.append((self.id,"aux"))
+        b.append((self.id, "main"))
+        b.append((self.id, "aux"))
         return b
+
 
 @register
 class TemperatureDevice(Device):
@@ -188,6 +199,6 @@ class TemperatureDevice(Device):
     async def stop_alarm(self):
         t = await self.latesttemp
         if t > (await self.temphigh):
-            await self.set_temphigh(int(t+2))
+            await self.set_temphigh(int(t + 2))
         if t < (await self.templow):
-            await self.set_templow(int(t-1))
+            await self.set_templow(int(t - 1))

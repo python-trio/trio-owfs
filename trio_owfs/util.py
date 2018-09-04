@@ -1,6 +1,5 @@
 # utility code
 
-
 import operator
 from collections import deque, OrderedDict
 
@@ -9,11 +8,13 @@ import outcome
 
 import trio
 
+
 class CancelledError(RuntimeError):
     """\
         A queued request has been cancelled.
         """
     pass
+
 
 @attr.s
 class ValueEvent:
@@ -82,5 +83,3 @@ class ValueEvent:
 
         """
         return self._lot.statistics()
-
-

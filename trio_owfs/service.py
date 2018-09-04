@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["OWFS"]
 
+
 class Service:
     """\
         This is the master class you use for communicating with OWFS.
@@ -41,12 +42,12 @@ class Service:
     def __init__(self, nursery, scan=0):
         self.nursery = nursery
         self._servers = set()  # typ.MutableSet[Server]  # Server
-        self._devices = dict() # ID => Device
+        self._devices = dict()  # ID => Device
         self._tasks = set()  # typ.MutableSet[]  # actually their cancel scopes
         self._event_queue = None  # typ.Optional[trio.Queue]
         self.scan = scan
 
-    async def add_server(self, host:str, port:int=4304):
+    async def add_server(self, host: str, port: int = 4304):
         s = Server(self, host, port)
         self.push_event(ServerRegistered(s))
         try:
@@ -146,13 +147,16 @@ class Service:
                 assert self._event_queue is None
                 self._event_queue = trio.Queue(1000)  # bus events
                 return slf
+
             def __exit__(slf, *tb):
                 if tb[1] is None:
                     assert self._event_queue.is_empty()
                 self._event_queue.put_nowait(None)
                 self._event_queue = None
+
             def __aiter__(slf):
                 return slf
+
             async def __anext__(slf):
                 res = await self._event_queue.get()
                 if res is None:
@@ -161,10 +165,10 @@ class Service:
 
         return EventWrapper()
 
+
 @asynccontextmanager
 async def OWFS(**kwargs):
     async with trio.open_nursery() as n:
         s = Service(n, **kwargs)
         async with s:
             yield s
-

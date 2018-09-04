@@ -8,9 +8,11 @@ from .event import BusAdded, BusDeleted
 import logging
 logger = logging.getLogger(__name__)
 
+
 class Bus:
     """Describes one bus.
     """
+
     def __init__(self, server, *path):
         self.service = server.service
         self.server = server
@@ -21,10 +23,10 @@ class Bus:
         self._unseen = 0  # didn't find when scanning
 
     def __repr__(self):
-        return "<%s:%s %s>" % (self.__class__.__name__,self.server, '/'+'/'.join(self.path))
+        return "<%s:%s %s>" % (self.__class__.__name__, self.server, '/' + '/'.join(self.path))
 
     def __eq__(self, x):
-        x = getattr(x,'path',x)
+        x = getattr(x, 'path', x)
         return self.path == x
 
     def __hash__(self):
@@ -65,7 +67,7 @@ class Bus:
             try:
                 ids = split_id(d)
             except NotADevice as err:
-                logger.debug("Not a device: %s",err)
+                logger.debug("Not a device: %s", err)
                 continue
             dev = self.service.get_device(d)
             if dev.bus is self:
@@ -73,7 +75,7 @@ class Bus:
             else:
                 self.add_device(dev)
             dev._unseen = 0
-            logger.debug("Found %s/%s", '/'.join(self.path),d)
+            logger.debug("Found %s/%s", '/'.join(self.path), d)
             self.add_device(dev)
             for b in dev.buses():
                 buses.add(b)
@@ -110,4 +112,3 @@ class Bus:
         if self.server is None:
             raise NoLocationKnown(self)
         return await self.server.attr_set(*(self.path + attr), value=value)
-

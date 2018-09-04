@@ -14,6 +14,7 @@ from .bus import Bus
 import logging
 logger = logging.getLogger(__name__)
 
+
 class Server:
     """\
         Encapsulate one server connection.
@@ -50,7 +51,9 @@ class Server:
             return bus
 
     def __repr__(self):
-        return "<%s:%s:%d %s>" % (self.__class__.__name__, self.host, self.port, "OK" if self.stream else "closed")
+        return "<%s:%s:%d %s>" % (
+            self.__class__.__name__, self.host, self.port, "OK" if self.stream else "closed"
+        )
 
     async def _reader(self, task_status=trio.TASK_STATUS_IGNORED):
         with trio.open_cancel_scope() as scope:
@@ -60,18 +63,18 @@ class Server:
                 while True:
                     try:
                         with trio.fail_after(15):
-                            res,data = await it.__anext__()
+                            res, data = await it.__anext__()
                     except ServerBusy as exc:
                         msg = self.requests.popleft()
                         msg.process_error(exc)
-                    except (StopAsyncIteration,trio.TooSlowError,trio.BrokenStreamError):
+                    except (StopAsyncIteration, trio.TooSlowError, trio.BrokenStreamError):
                         await self._reconnect(from_reader=True)
                         break
                     except trio.ClosedResourceError:
-                        return # exiting
+                        return  # exiting
                     else:
                         msg = self.requests.popleft()
-                        msg.process_reply(res,data, self)
+                        msg.process_reply(res, data, self)
                         if not msg.done():
                             self.requests.appendleft(msg)
 
@@ -98,7 +101,7 @@ class Server:
                 else:
                     self._msg_proto = MessageProtocol(self.stream, is_server=False)
                     # re-send messages, but skip those that have been cancelled
-                    ml,self.requests = list(self.requests),deque()
+                    ml, self.requests = list(self.requests), deque()
                     for msg in ml:
                         if not msg.cancelled:
                             self.requests.append(msg)
@@ -173,11 +176,10 @@ class Server:
                     return
                 except trio.BrokenStreamError:
                     await self.stream.aclose()
-                    return # wil be restarted by the reader
+                    return  # wil be restarted by the reader
                 else:
                     self.requests.append(self._wmsg)
                     self._wmsg = None
-
 
     async def drop(self):
         """Stop talking and delete yourself"""
@@ -262,7 +264,6 @@ class Server:
             else:
                 bus._unseen += 1
 
-
     async def start_scan(self, interval):
         self._scan_task = await self.service.add_task(self._scan, interval)
 
@@ -271,4 +272,3 @@ class Server:
 
     async def attr_set(self, *path, value):
         return await self.chat(AttrSetMsg(*path, value=value))
-

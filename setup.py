@@ -18,7 +18,10 @@ setup(
         "trio",
     ],
     keywords=[
-        "trio", "async", "io", "networking",
+        "trio",
+        "async",
+        "io",
+        "networking",
     ],
     python_requires=">=3.6",
     classifiers=[

@@ -10,29 +10,32 @@ from .error import _errors, GenericOWFSReplyError
 import logging
 logger = logging.getLogger(__name__)
 
+
 class OWMsg:
     """Constants for the owserver api message types."""
-    error       = 0
-    nop         = 1
-    read        = 2
-    write       = 3
-    dir         = 4
-    size        = 5
-    presence    = 6
-    dirall      = 7
-    get         = 8
+    error = 0
+    nop = 1
+    read = 2
+    write = 3
+    dir = 4
+    size = 5
+    presence = 6
+    dirall = 7
+    get = 8
     dirallslash = 9
-    getslash    = 10
+    getslash = 10
+
 
 class OWFlag:
-    cache = 0x1 # ?
-    busret = 0x2 # enumeration includes bus names
-    persist = 0x4 # use persistent connections
+    cache = 0x1  # ?
+    busret = 0x2  # enumeration includes bus names
+    persist = 0x4  # use persistent connections
     alias = 0x8
     safemode = 0x10
     uncached = 0x20
     ownet = 0x100
     _offset = 0
+
 
 class OWdevformat:
     fdi = 0
@@ -43,12 +46,14 @@ class OWdevformat:
     fic = 5
     _offset = 24
 
+
 class OWtempformat:
     celsius = 0
     fahrenheit = 1
     kelvin = 2
     rankine = 3
     _offset = 16
+
 
 class OWpressureformat:
     mbar = 0
@@ -59,16 +64,19 @@ class OWpressureformat:
     pa = 5
     _offset = 18
 
+
 class ServerBusy(Exception):
     """Receiver error when the server signals it's busy"""
     pass
+
 
 class Retry(Exception):
     """Sender resubmitted."""
     pass
 
+
 class MessageProtocol:
-    MAX_LENGTH=9999
+    MAX_LENGTH = 9999
 
     def __init__(self, stream, is_server=False):
         self.stream = stream
@@ -94,7 +102,8 @@ class MessageProtocol:
         if offset & 0x8000:
             offset = 0
         elif offset != 0 and not is_server:
-            import pdb;pdb.set_trace()
+            import pdb
+            pdb.set_trace()
         if version != 0:
             raise RuntimeError(f"Wrong version: {version}")
         if payload_len == -1 and data_len == 0 and offset == 0:
@@ -104,9 +113,10 @@ class MessageProtocol:
         if payload_len == 0:
             data_len = 0
         data = await self._read_buf(payload_len)
-        logger.debug("OW recv%s %x %x %x %x %x %x %s",
-                "S" if self.is_server else "",
-                version, payload_len, ret_value, format_flags, data_len, offset, repr(data))
+        logger.debug(
+            "OW recv%s %x %x %x %x %x %x %s", "S" if self.is_server else "", version, payload_len,
+            ret_value, format_flags, data_len, offset, repr(data)
+        )
         if self.is_server:
             return ret_value, format_flags, data, data_len
         else:
@@ -115,30 +125,32 @@ class MessageProtocol:
 
     async def write(self, typ, flags, rlen, data=b'', offset=0):
         if data is None:
-            logger.debug("OW send%s %x %x %x %x %x %x -",
-                    "S" if self.is_server else "",
-                    0, -1, typ, flags, rlen, offset)
-            await self.stream.send_all(struct.pack("!6i",
-                0, -1, typ, flags, rlen, offset))
+            logger.debug(
+                "OW send%s %x %x %x %x %x %x -", "S"
+                if self.is_server else "", 0, -1, typ, flags, rlen, offset
+            )
+            await self.stream.send_all(struct.pack("!6i", 0, -1, typ, flags, rlen, offset))
         else:
-            logger.debug("OW send%s %x %x %x %x %x %x %s",
-                    "S" if self.is_server else "",
-                    0, len(data), typ, flags, rlen, offset, repr(data))
-            await self.stream.send_all(struct.pack("!6i",
-                0, len(data), typ, flags, rlen, offset) + data)
+            logger.debug(
+                "OW send%s %x %x %x %x %x %x %s", "S"
+                if self.is_server else "", 0, len(data), typ, flags, rlen, offset, repr(data)
+            )
+            await self.stream.send_all(
+                struct.pack("!6i", 0, len(data), typ, flags, rlen, offset) + data
+            )
 
 
 class Message:
     timeout = 0.5
     cancelled = False
 
-    def __init__(self,typ,data,rlen):
+    def __init__(self, typ, data, rlen):
         #self.persist = persist
         self.typ = typ
         self.data = data
         self.rlen = rlen
         self.event = ValueEvent()
-        
+
     def cancel(self):
         self.cancelled = True
 
@@ -161,27 +173,27 @@ class Message:
         self.event = ValueEvent()
 
         await protocol.write(self.typ, flags, self.rlen, self.data)
-    
+
     def _resubmit(self):
         self.event = ValueEvent()
 
     def process_reply(self, res, data, server):
-        logger.debug("PROCESS %s %s %s",self,res,data)
+        logger.debug("PROCESS %s %s %s", self, res, data)
         if res < 0:
             err = _errors.get(-res, GenericOWFSReplyError)
             if err is GenericOWFSReplyError:
-                raise err(res,self, server)
+                raise err(res, self, server)
             else:
                 raise err(self, server)
         elif res > 0:
-            assert len(data) == res, (data,res)
+            assert len(data) == res, (data, res)
         data = self._process(data)
         if data is not None:
             self.event.set(data)
-    
+
     def process_error(self, exc):
         self.event.set_error(exc)
-    
+
     def _process(self, data):
         return data
 
@@ -193,62 +205,67 @@ class Message:
     def done(self):
         return self.event.is_set
 
-    def _check(self, cmd,data=None):
+    def _check(self, cmd, data=None):
         """Used in testing: verify that a message is correct."""
-        assert self.typ == cmd, (self.typ,cmd)
+        assert self.typ == cmd, (self.typ, cmd)
         if data is not None:
-            assert self.data == data, (cmd,self.data,data)
+            assert self.data == data, (cmd, self.data, data)
+
 
 def _path(path):
     """Helper to build an OWFS path from a list"""
-    path = '/'+'/'.join(str(x) for x in path)
-    return path.encode('utf-8')+b'\0'
+    path = '/' + '/'.join(str(x) for x in path)
+    return path.encode('utf-8') + b'\0'
+
 
 class NOPMsg(Message):
     def __init__(self):
-        super().__init__(OWMsg.nop,b'',0)
+        super().__init__(OWMsg.nop, b'', 0)
 
     def __repr__(self):
         return "<%s>" % (self.__class__.__name__)
+
 
 class AttrGetMsg(Message):
     """read an OWFS value"""
     timeout = 2
 
-    def __init__(self,*path):
+    def __init__(self, *path):
         assert path
         self.path = path
-        super().__init__(OWMsg.read,_path(self.path),8192)
+        super().__init__(OWMsg.read, _path(self.path), 8192)
 
     def __repr__(self):
-        return "<%s %s>" % (self.__class__.__name__, '/'+'/'.join(self.path))
-        
+        return "<%s %s>" % (self.__class__.__name__, '/' + '/'.join(self.path))
+
+
 class AttrSetMsg(Message):
     """write an OWFS value"""
     timeout = 1
 
-    def __init__(self,*path,value):
+    def __init__(self, *path, value):
         assert path is not None
         self.path = path
         self.value = value
-        if isinstance(value,bool):
+        if isinstance(value, bool):
             value = b'1' if value else b'0'
-        elif not isinstance(value,bytes):
+        elif not isinstance(value, bytes):
             value = str(value).encode("utf-8")
-        super().__init__(OWMsg.write,_path(self.path)+value,len(value))
+        super().__init__(OWMsg.write, _path(self.path) + value, len(value))
 
     def __repr__(self):
-        return "<%s %s =%s>" % (self.__class__.__name__, '/'+'/'.join(self.path), self.value)
-        
+        return "<%s %s =%s>" % (self.__class__.__name__, '/' + '/'.join(self.path), self.value)
+
+
 class DirMsg(Message):
     """Read an owfs directory"""
     timeout = 10
 
-    def __init__(self,path):
+    def __init__(self, path):
         self.path = path
         p = _path(self.path)
-        super().__init__(OWMsg.dirall, p, len(p)-1)
-    
+        super().__init__(OWMsg.dirall, p, len(p) - 1)
+
     def _process(self, data):
         if data == b'':
             return []
@@ -258,7 +275,6 @@ class DirMsg(Message):
             entry = entry.decode("utf-8")
             s = entry.rfind('/')
             if s > -1:
-                entry = entry[s+1:]
+                entry = entry[s + 1:]
             res.append(entry)
         return res
-

@@ -1,12 +1,13 @@
 import trio
 from trio_owfs import OWFS
 from trio_owfs.protocol import MessageProtocol, OWMsg
-from trio_owfs.error import OWFSReplyError,NoEntryError
+from trio_owfs.error import OWFSReplyError, NoEntryError
 from async_generator import asynccontextmanager
 from functools import partial
 
 import logging
 logger = logging.getLogger(__name__)
+
 
 def _chk(v):
     if v is None:
@@ -16,6 +17,7 @@ def _chk(v):
         v[0] = 1
     return v[v[0]]
 
+
 async def _schk(v):
     if v is None:
         return
@@ -23,17 +25,18 @@ async def _schk(v):
     if v[0] >= len(v):
         v[0] = 1
     if v[v[0]] > 0:
-        logger.debug("Slow reply %s",v[v[0]])
+        logger.debug("Slow reply %s", v[v[0]])
     await trio.sleep(v[v[0]])
+
 
 async def some_server(tree, msgs, options, socket):
     rdr = MessageProtocol(socket, is_server=True)
     logger.debug("START Server")
     if msgs:
         midx = 0
-        if isinstance(msgs[0],list):
-            msgs.insert(0,0)
-        if isinstance(msgs[0],int):
+        if isinstance(msgs[0], list):
+            msgs.insert(0, 0)
+        if isinstance(msgs[0], int):
             midx = msgs[0]
             msgs[0] += 1
             msgs = msgs[msgs[0]]
@@ -49,11 +52,11 @@ async def some_server(tree, msgs, options, socket):
             except StopIteration:
                 pass
             else:
-                raise RuntimeError("Message '%s' not seen (%d,%d)" % (m,midx,mpos))
+                raise RuntimeError("Message '%s' not seen (%d,%d)" % (m, midx, mpos))
 
-    each_busy = options.get("busy_every",None)
-    each_close = options.get("close_every",None)
-    each_slow = options.get("slow_every",None)
+    each_busy = options.get("busy_every", None)
+    each_close = options.get("close_every", None)
+    each_slow = options.get("slow_every", None)
     try:
         if _chk(each_close):
             _end(msgs)
@@ -62,23 +65,26 @@ async def some_server(tree, msgs, options, socket):
             try:
                 await _schk(each_slow)
                 if _chk(each_busy):
-                    await rdr.write(0,format_flags,0, data=None)
+                    await rdr.write(0, format_flags, 0, data=None)
                     continue
                 if msgs:
                     try:
                         m = next(msgs)
                     except StopIteration:
-                        raise RuntimeError("Unexpected command %d/%d: %d %x %s %d" % (midx,mpos,command, format_flags, repr(data), offset)) from None
+                        raise RuntimeError(
+                            "Unexpected command %d/%d: %d %x %s %d" %
+                            (midx, mpos, command, format_flags, repr(data), offset)
+                        ) from None
                     mpos += 1
                     try:
                         m._check(command, data)
                     except Exception:
-                        raise RuntimeError("Message '%s' wrong seen (%d,%d)" % (m,midx,mpos))
+                        raise RuntimeError("Message '%s' wrong seen (%d,%d)" % (m, midx, mpos))
                 if _chk(each_close):
                     _end(msgs)
                     return
                 if command == OWMsg.nop:
-                    await rdr.write(0,format_flags,0)
+                    await rdr.write(0, format_flags, 0)
                 elif command == OWMsg.dirall:
                     data = data.rstrip(b'\0')
                     subtree = tree
@@ -91,17 +97,17 @@ async def some_server(tree, msgs, options, socket):
                         try:
                             subtree = subtree[k]
                         except KeyError:
-                            raise NoEntryError(command,data)
+                            raise NoEntryError(command, data)
                     res = []
-                    for k,v in subtree.items():
+                    for k, v in subtree.items():
                         k = k.encode('utf-8')
                         res.append(k)
                     if path:
-                        path = b'/'+b'/'.join(path)+b'/'
+                        path = b'/' + b'/'.join(path) + b'/'
                     else:
                         path = b'/'
-                    data = b','.join(path+k for k in res)
-                    await rdr.write(0,format_flags,len(data),data+b'\0')
+                    data = b','.join(path + k for k in res)
+                    await rdr.write(0, format_flags, len(data), data + b'\0')
                 elif command == OWMsg.read:
                     data = data.rstrip(b'\0')
                     res = tree
@@ -112,10 +118,10 @@ async def some_server(tree, msgs, options, socket):
                         try:
                             res = res[k]
                         except KeyError:
-                            raise NoEntryError(command,data)
-                    assert not isinstance(res,dict)
+                            raise NoEntryError(command, data)
+                    assert not isinstance(res, dict)
                     res = res.encode('utf-8')
-                    await rdr.write(0,format_flags,len(res),res+b'\0')
+                    await rdr.write(0, format_flags, len(res), res + b'\0')
                 elif command == OWMsg.write:
                     val = data[-offset:].decode("utf-8")
                     data = data[:-offset]
@@ -130,18 +136,22 @@ async def some_server(tree, msgs, options, socket):
                         last = k.decode("utf-8")
                     assert last is not None
                     res[last] = val
-                    await rdr.write(0,format_flags,0)
+                    await rdr.write(0, format_flags, 0)
                 else:
-                    raise RuntimeError("Unknown command: %d %x %s %d" % (command, format_flags, repr(data), offset))
+                    raise RuntimeError(
+                        "Unknown command: %d %x %s %d" %
+                        (command, format_flags, repr(data), offset)
+                    )
             except OWFSReplyError as err:
-                logger.info("Error: %s",err)
-                await rdr.write(0,format_flags,-err.err)
+                logger.info("Error: %s", err)
+                await rdr.write(0, format_flags, -err.err)
 
         _end(msgs)
     except trio.BrokenStreamError:
         _end(msgs)
     finally:
         logger.debug("END Server")
+
 
 class EventChecker:
     def __init__(self, events=[]):
@@ -156,7 +166,7 @@ class EventChecker:
             with ow.events as ev:
                 task_status.started()
                 async for e in ev:
-                    logger.debug("Event %s",e)
+                    logger.debug("Event %s", e)
                     self.check_next(e)
         except RuntimeError:
             raise
@@ -172,15 +182,16 @@ class EventChecker:
         except IndexError:
             raise RuntimeError("Unexpected event %s" % (e,))
         self.pos += 1
-        if isinstance(t,type) and isinstance(e,t):
+        if isinstance(t, type) and isinstance(e, t):
             pass
         elif not (t == e):
-            raise RuntimeError("Wrong event: want %s but has %s" % (t,e))
+            raise RuntimeError("Wrong event: want %s but has %s" % (t, e))
 
     def check_last(self):
         logger.debug("Event END")
         if self.pos != len(self.events):
             raise RuntimeError("Superfluous event #%d: %s" % (self.pos, self.events[self.pos]))
+
 
 @asynccontextmanager
 async def server(tree={}, msgs=(), options={}, events=None):
@@ -188,7 +199,10 @@ async def server(tree={}, msgs=(), options={}, events=None):
         async with trio.open_nursery() as n:
             s = None
             try:
-                server = await n.start(partial(trio.serve_tcp, host="127.0.0.1"), partial(some_server, tree, msgs, options), 0)
+                server = await n.start(
+                    partial(trio.serve_tcp, host="127.0.0.1"),
+                    partial(some_server, tree, msgs, options), 0
+                )
                 if events is not None:
                     await n.start(events, ow)
                 addr = server[0].socket.getsockname()
@@ -204,4 +218,3 @@ async def server(tree={}, msgs=(), options={}, events=None):
                 ow.push_event(None)
                 await trio.sleep(0.1)
                 n.cancel_scope.cancel()
-
