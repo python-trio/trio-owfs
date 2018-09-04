@@ -36,9 +36,10 @@ logger = logging.getLogger('examples.walk')
 __all__ = ['main']
 
 async def mon(ow, *, task_status=trio.TASK_STATUS_IGNORED):
-    task_status.started()
-    async for msg in ow:
-        logger.info("%s", msg)
+    with ow.events as events:
+        task_status.started()
+        async for msg in events:
+            logger.info("%s", msg)
 
 @click.command()
 @click.option('--host', default='localhost', help='host running owserver')
