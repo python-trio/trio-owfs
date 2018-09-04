@@ -55,10 +55,14 @@ async def main(host, port, debug, id, attr):
             await ow.add_task(mon, ow)
         s = await ow.add_server(host, port)
         await s.scan_done
-        dev = ow.get_device(id)
-        if dev.bus is None:
-            print("Device not found", file=sys.stderr)
-        print((await dev.attr_get(attr)).decode("utf-8").strip())
+        attr = [k for k in attr.split('/') if k]
+        if id == '-':
+            dev = s
+        else:
+            dev = ow.get_device(id)
+            if dev.bus is None:
+                print("Device not found", file=sys.stderr)
+        print((await dev.attr_get(*attr)).decode("utf-8").strip())
 
 
 if __name__ == '__main__':
