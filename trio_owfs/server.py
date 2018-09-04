@@ -49,10 +49,6 @@ class Server:
             self.service.push_event(BusAdded(bus))
             return bus
 
-    def _del_bus(self, bus):
-        del self._buses[bus.path]
-        self.service.push_event(BusDeleted(bus))
-
     def __repr__(self):
         return "<%s:%s:%d %s>" % (self.__class__.__name__, self.host, self.port, "OK" if self.stream else "closed")
 
@@ -71,6 +67,8 @@ class Server:
                     except (StopAsyncIteration,trio.TooSlowError):
                         await self._reconnect(from_reader=True)
                         break
+                    except trio.ClosedResourceError:
+                        return # exiting
                     else:
                         msg = self.requests.popleft()
                         msg.process_reply(res,data, self)
@@ -132,6 +130,9 @@ class Server:
             await self.aclose()
             raise
 
+    async def setup_struct(self, dev):
+        await dev.setup_struct(self)
+
     async def chat(self, msg, fail=False):
         backoff = 0.1
         await self._wqueue.put(msg)
@@ -188,19 +189,27 @@ class Server:
     async def aclose(self):
         if self.stream is None:
             return
+        try:
+            await self.stream.aclose()
+        finally:
+            self.stream = None
+            self.service.push_event(ServerDisconnected(self))
+
         if self._write_scope is not None:
             self._write_scope.cancel()
             self._write_scope = None
         if self._read_scope is not None:
             self._read_scope.cancel()
             self._read_scope = None
-        try:
-            await self.stream.aclose()
-        finally:
-            self.stream = None
-            self.service.push_event(ServerDisconnected(self))
+
         for b in list(self._buses.values()):
             b.delocate()
+        self._buses = None
+
+    @property
+    def all_buses(self):
+        for b in list(self._buses.values()):
+            yield from b.all_buses
 
     async def dir(self, *path):
         return await self.chat(DirMsg(path))
@@ -230,6 +239,8 @@ class Server:
 
     async def _scan_base(self):
         old_paths = set()
+
+        # step 1: enumerate
         for d in await self.dir():
             if d.startswith("bus."):
                 bus = self.get_bus(d)
@@ -240,6 +251,8 @@ class Server:
                     pass
                 buses = await bus._scan_one()
                 old_paths -= buses
+
+        # step 2: deregister buses, if not seen often enough
         for p in old_paths:
             bus = self._buses.get(p, None)
             if bus is None:

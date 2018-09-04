@@ -3,6 +3,7 @@ Devices.
 """
 
 import attr
+from functools import partial
 
 from .event import DeviceLocated, DeviceNotFound
 
@@ -102,7 +103,7 @@ class Device:
                     else:
                         val = str(val).encode("utf-8")
                     await self.attr_set(name, value=val)
-                return partial(setter, self, slf.name, slf.typ)
+                return partial(setter, self, slf.typ, slf.name)
 
         if cls._did_setup is not False:
             return
@@ -117,7 +118,7 @@ class Device:
                     if v[3] in {'ro','rw'}:
                         setattr(cls, d, SimpleGetter(d,v[0]))
                     if v[3] in {'wo','rw'}:
-                        setattr(cls, 'set'+d, SimpleSetter(d,v[0]))
+                        setattr(cls, 'set_'+d, SimpleSetter(d,v[0]))
                 except Exception:
                     raise
 
@@ -176,8 +177,8 @@ class SwitchDevice(Device):
     family = 0x1F
     def buses(self):
         b = []
-        b.append(self.bus.path+(self.id,"main"))
-        b.append(self.bus.path+(self.id,"aux"))
+        b.append((self.id,"main"))
+        b.append((self.id,"aux"))
         return b
 
 @register

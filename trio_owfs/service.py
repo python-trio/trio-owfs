@@ -5,7 +5,7 @@ from async_generator import asynccontextmanager
 import typing as typ
 
 from .server import Server
-from .device import Device
+from .device import Device, dev_classes
 from .event import ServerRegistered, ServerDeregistered
 from .event import DeviceAdded, DeviceDeleted
 
@@ -60,6 +60,14 @@ class Service:
             if self.scan is not None:
                 await s.start_scan(self.scan)
         return s
+
+    async def ensure_struct(self, dev):
+        cls = type(dev)
+        if cls._did_setup:
+            return
+        for s in list(self._servers):
+            await cls.setup_struct(s)
+            return
 
     def add_device(self, dev, bus=None):
         """Add a device, possibly seen on a bus."""

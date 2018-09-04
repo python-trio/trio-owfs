@@ -231,7 +231,10 @@ class AttrSetMsg(Message):
         assert path is not None
         self.path = path
         self.value = value
-        value = str(value).encode("utf-8")
+        if isinstance(value,bool):
+            value = b'1' if value else b'0'
+        elif not isinstance(value,bytes):
+            value = str(value).encode("utf-8")
         super().__init__(OWMsg.write,_path(self.path)+value,len(value))
 
     def __repr__(self):

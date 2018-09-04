@@ -13,7 +13,7 @@ class OWFSReplyError(Exception):
     pass
 
 @attr.s(cmp=False)
-class GenericOWFSReplyError(Exception):
+class GenericOWFSReplyError(OWFSReplyError):
     err = attr.ib()
     req = attr.ib()
     server = attr.ib()
@@ -21,7 +21,7 @@ class GenericOWFSReplyError(Exception):
 _errors = {}
 
 @attr.s(cmp=False)
-class OWFSReplyError_(Exception):
+class OWFSReplyError_(OWFSReplyError):
     req = attr.ib()
     server = attr.ib()
 

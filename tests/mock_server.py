@@ -1,6 +1,7 @@
 import trio
 from trio_owfs import OWFS
 from trio_owfs.protocol import MessageProtocol, OWMsg
+from trio_owfs.error import OWFSReplyError,NoEntryError
 from async_generator import asynccontextmanager
 from functools import partial
 
@@ -58,73 +59,83 @@ async def some_server(tree, msgs, options, socket):
             _end(msgs)
             return
         async for command, format_flags, data, offset in rdr:
-            await _schk(each_slow)
-            if _chk(each_busy):
-                await rdr.write(0,format_flags,0, data=None)
-                continue
-            if msgs:
-                try:
-                    m = next(msgs)
-                except StopIteration:
-                    raise RuntimeError("Unexpected command %d/%d: %d %x %s %d" % (midx,mpos,command, format_flags, repr(data), offset)) from None
-                mpos += 1
-                try:
-                    m._check(command, data)
-                except Exception:
-                    raise RuntimeError("Message '%s' wrong seen (%d,%d)" % (m,midx,mpos))
-            if _chk(each_close):
-                _end(msgs)
-                return
-            if command == OWMsg.nop:
-                await rdr.write(0,format_flags,0)
-            elif command == OWMsg.dirall:
-                data = data.rstrip(b'\0')
-                subtree = tree
-                path = []
-                for k in data.split(b'/'):
-                    if k == b'':
-                        continue
-                    path.append(k)
-                    k = k.decode("utf-8")
-                    subtree = subtree[k]
-                res = []
-                for k,v in subtree.items():
-                    k = k.encode('utf-8')
-                    res.append(k)
-                if path:
-                    path = b'/'+b'/'.join(path)+b'/'
+            try:
+                await _schk(each_slow)
+                if _chk(each_busy):
+                    await rdr.write(0,format_flags,0, data=None)
+                    continue
+                if msgs:
+                    try:
+                        m = next(msgs)
+                    except StopIteration:
+                        raise RuntimeError("Unexpected command %d/%d: %d %x %s %d" % (midx,mpos,command, format_flags, repr(data), offset)) from None
+                    mpos += 1
+                    try:
+                        m._check(command, data)
+                    except Exception:
+                        raise RuntimeError("Message '%s' wrong seen (%d,%d)" % (m,midx,mpos))
+                if _chk(each_close):
+                    _end(msgs)
+                    return
+                if command == OWMsg.nop:
+                    await rdr.write(0,format_flags,0)
+                elif command == OWMsg.dirall:
+                    data = data.rstrip(b'\0')
+                    subtree = tree
+                    path = []
+                    for k in data.split(b'/'):
+                        if k == b'':
+                            continue
+                        path.append(k)
+                        k = k.decode("utf-8")
+                        try:
+                            subtree = subtree[k]
+                        except KeyError:
+                            raise NoEntryError(command,data)
+                    res = []
+                    for k,v in subtree.items():
+                        k = k.encode('utf-8')
+                        res.append(k)
+                    if path:
+                        path = b'/'+b'/'.join(path)+b'/'
+                    else:
+                        path = b'/'
+                    data = b','.join(path+k for k in res)
+                    await rdr.write(0,format_flags,len(data),data+b'\0')
+                elif command == OWMsg.read:
+                    data = data.rstrip(b'\0')
+                    res = tree
+                    for k in data.split(b'/'):
+                        if k == b'':
+                            continue
+                        k = k.decode("utf-8")
+                        try:
+                            res = res[k]
+                        except KeyError:
+                            raise NoEntryError(command,data)
+                    assert not isinstance(res,dict)
+                    res = res.encode('utf-8')
+                    await rdr.write(0,format_flags,len(res),res+b'\0')
+                elif command == OWMsg.write:
+                    val = data[-offset:].decode("utf-8")
+                    data = data[:-offset]
+                    data = data.rstrip(b'\0')
+                    res = tree
+                    last = None
+                    for k in data.split(b'/'):
+                        if k == b'':
+                            continue
+                        if last is not None:
+                            res = res[last]
+                        last = k.decode("utf-8")
+                    assert last is not None
+                    res[last] = val
+                    await rdr.write(0,format_flags,0)
                 else:
-                    path = b'/'
-                data = b','.join(path+k for k in res)
-                await rdr.write(0,format_flags,len(data),data+b'\0')
-            elif command == OWMsg.read:
-                data = data.rstrip(b'\0')
-                res = tree
-                for k in data.split(b'/'):
-                    if k == b'':
-                        continue
-                    k = k.decode("utf-8")
-                    res = res[k]
-                assert not isinstance(res,dict)
-                res = res.encode('utf-8')
-                await rdr.write(0,format_flags,len(res),res+b'\0')
-            elif command == OWMsg.write:
-                val = data[-offset:].decode("utf-8")
-                data = data[:-offset]
-                data = data.rstrip(b'\0')
-                res = tree
-                last = None
-                for k in data.split(b'/'):
-                    if k == b'':
-                        continue
-                    if last is not None:
-                        res = res[last]
-                    last = k.decode("utf-8")
-                assert last is not None
-                res[last] = val
-                await rdr.write(0,format_flags,0)
-            else:
-                raise RuntimeError("Unknown command: %d %x %s %d" % (command, format_flags, repr(data), offset))
+                    raise RuntimeError("Unknown command: %d %x %s %d" % (command, format_flags, repr(data), offset))
+            except OWFSReplyError as err:
+                logger.info("Error: %s",err)
+                await rdr.write(0,format_flags,-err.err)
 
         _end(msgs)
     except trio.BrokenStreamError:

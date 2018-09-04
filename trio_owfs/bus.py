@@ -3,6 +3,7 @@ Buses.
 """
 
 from .device import Device, NotADevice, split_id
+from .event import BusAdded, BusDeleted
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ class Bus:
         return hash(self.path)
 
     def delocate(self):
-        """The bus can no longer be found"""
+        """This bus can no longer be found"""
         if self._buses:
             for b in list(self._buses.values()):
                 b.delocate()
@@ -39,7 +40,22 @@ class Bus:
             for d in list(self._devices.values()):
                 d.delocate(bus=self)
             self._devices = None
-        self.server._del_bus(self)
+        self.service.push_event(BusDeleted(self))
+
+    @property
+    def all_buses(self):
+        yield self
+        for b in self._buses.values():
+            yield from b.all_buses
+
+    def get_bus(self, *path):
+        try:
+            return self._buses[path]
+        except KeyError:
+            bus = Bus(self.server, *(self.path + path))
+            self._buses[path] = bus
+            self.service.push_event(BusAdded(bus))
+            return bus
 
     async def _scan_one(self):
         buses = set()
@@ -61,7 +77,7 @@ class Bus:
             self.add_device(dev)
             for b in dev.buses():
                 buses.add(b)
-                bus = self.server.get_bus(*b)
+                bus = self.get_bus(*b)
                 buses.update(await bus._scan_one())
 
         for d in old_devs:

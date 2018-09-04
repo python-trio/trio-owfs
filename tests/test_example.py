@@ -3,7 +3,7 @@ import pytest
 from copy import deepcopy
 
 from trio_owfs.protocol import NOPMsg, DirMsg,AttrGetMsg,AttrSetMsg
-from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered,DeviceAdded,DeviceLocated,DeviceNotFound,BusAdded_Path,BusAdded
+from trio_owfs.event import ServerRegistered,ServerConnected,ServerDisconnected,ServerDeregistered,DeviceAdded,DeviceLocated,DeviceNotFound,BusAdded_Path,BusAdded,BusDeleted
 from trio_owfs.bus import Bus
 
 from .mock_server import server, EventChecker
@@ -12,13 +12,37 @@ from .mock_server import server, EventChecker
 # This also uses a virtual clock fixture, so time passes quickly and
 # predictably.
 
+structs = {
+    "10": {
+        "address": "a,000000,000001,ro,000016,f,",
+        "alias": "l,000000,000001,rw,000256,f,",
+        "crc8": "a,000000,000001,ro,000002,f,",
+        "family": "a,000000,000001,ro,000002,f,",
+        "id": "a,000000,000001,ro,000012,f,",
+        "latesttemp": "t,000000,000001,ro,000012,v,",
+        "locator": "a,000000,000001,ro,000016,f,",
+        "power": "y,000000,000001,ro,000001,v,",
+        "r_address": "a,000000,000001,ro,000016,f,",
+        "r_id": "a,000000,000001,ro,000012,f,",
+        "r_locator": "a,000000,000001,ro,000016,f,",
+        "scratchpad": "b,000000,000001,ro,000009,v,",
+        "temperature": "t,000000,000001,ro,000012,v,",
+        "temphigh": "t,000000,000001,rw,000012,s,",
+        "templow": "t,000000,000001,rw,000012,s,",
+        "type": "a,000000,000001,ro,000032,f,",
+    },
+}
+
 basic_tree = {
         "bus.0": {
             "10.345678.90": {
                 "whatever": "hello",
                 "temperature": "12.5",
+                "templow": "10",
+                "temphigh": "20",
             }
-        }
+        },
+        "structure": structs,
     }
 
 coupler_tree = {
@@ -39,7 +63,8 @@ coupler_tree = {
                     },
                 },
             }
-        }
+        },
+        "structure": structs,
     }
 
 async def test_empty_server():
@@ -191,6 +216,7 @@ async def test_basic_server():
         AttrGetMsg("bus.0","10.345678.90","temperature"),
         AttrSetMsg("bus.0","10.345678.90","temperature", value=98.25),
         AttrGetMsg("bus.0","10.345678.90","temperature"),
+        AttrSetMsg("bus.0","10.345678.90","temperature", value=12.5),
     ]
     e1 = EventChecker([
         ServerRegistered,
@@ -199,6 +225,8 @@ async def test_basic_server():
         DeviceAdded("10.345678.90"),
         DeviceLocated("10.345678.90"),
         ServerDisconnected,
+        DeviceNotFound,
+        BusDeleted,
         ServerDeregistered,
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
@@ -209,6 +237,16 @@ async def test_basic_server():
         assert float(await dev.attr_get("temperature")) == 12.5
         await dev.attr_set("temperature", value=98.25)
         assert float(await dev.attr_get("temperature")) == 98.25
+        await dev.attr_set("temperature", value=12.5)
+
+async def test_basic_structs():
+    async with server(tree=basic_tree) as ow:
+        await trio.sleep(0)
+        dev = ow.get_device("10.345678.90")
+        await ow.ensure_struct(dev)
+        assert await dev.temperature == 12.5
+        await dev.set_temphigh(98.25)
+        assert await dev.temphigh == 98.25
 
 async def test_coupler_server():
     msgs = [
@@ -233,6 +271,13 @@ async def test_coupler_server():
         DeviceAdded("28.282828.28"),
         DeviceLocated("28.282828.28"),
         ServerDisconnected,
+        DeviceNotFound("20.222222.22"),
+        BusDeleted,
+        DeviceNotFound("28.282828.28"),
+        BusDeleted,
+        DeviceNotFound("10.345678.90"),
+        DeviceNotFound("1F.ABCDEF.F1"),
+        BusDeleted,
         ServerDeregistered,
     ])
     async with server(msgs=msgs, events=e1, tree=coupler_tree) as ow:
@@ -286,6 +331,8 @@ async def test_slow_server(mock_clock):
         DeviceAdded("10.345678.90"),
         DeviceLocated("10.345678.90"),
         ServerDisconnected,
+        DeviceNotFound("10.345678.90"),
+        BusDeleted,
         ServerDeregistered,
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree, options={'slow_every':[0,0,15,0,0]}) as ow:
@@ -304,6 +351,8 @@ async def test_busy_server():
         DeviceAdded("10.345678.90"),
         DeviceLocated("10.345678.90"),
         ServerDisconnected,
+        DeviceNotFound("10.345678.90"),
+        BusDeleted,
         ServerDeregistered,
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree, options={'busy_every':[0,0,1]}) as ow:
@@ -332,6 +381,8 @@ async def test_disconnecting_server():
         DeviceAdded("10.345678.90"),
         DeviceLocated("10.345678.90"),
         ServerDisconnected,
+        DeviceNotFound("10.345678.90"),
+        BusDeleted,
         ServerDeregistered,
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree, options={'close_every':[0,0,0,1]}) as ow:
@@ -362,6 +413,8 @@ async def test_disconnecting_server_2(mock_clock):
         DeviceAdded("10.345678.90"),
         DeviceLocated("10.345678.90"),
         ServerDisconnected,
+        DeviceNotFound("10.345678.90"),
+        BusDeleted,
         ServerDeregistered,
     ])
     async with server(msgs=msgs, events=e1, tree=basic_tree, options={'close_every':[0,1,0,0]}) as ow:
@@ -389,6 +442,7 @@ async def test_dropped_device():
         DeviceLocated("10.345678.90"),
         DeviceNotFound("10.345678.90"),
         ServerDisconnected,
+        BusDeleted,
         ServerDeregistered,
     ])
     my_tree = deepcopy(basic_tree)
@@ -429,6 +483,8 @@ async def test_manual_device(mock_clock):
         Checkpoint,
         DeviceLocated("10.345678.90"),
         ServerDisconnected,
+        DeviceNotFound("10.345678.90"),
+        BusDeleted,
         ServerDeregistered,
     ])
     my_tree = deepcopy(basic_tree)
@@ -464,6 +520,8 @@ async def test_manual_bus(mock_clock):
         DeviceLocated("10.345678.90"),
         Checkpoint,
         ServerDisconnected,
+        DeviceNotFound("10.345678.90"),
+        BusDeleted,
         ServerDeregistered,
     ])
     my_tree = deepcopy(basic_tree)
