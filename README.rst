@@ -11,7 +11,7 @@
    :alt: Latest PyPi version
 
 .. image:: https://travis-ci.org/python-trio/trio-owfs.svg?branch=master
-   :target: https://travis-ci.org/python-trio/trio
+   :target: https://travis-ci.org/python-trio/trio-owfs
    :alt: Automated test status
 
 .. image:: https://codecov.io/gh/python-trio/trio-owfs/branch/master/graph/badge.svg
