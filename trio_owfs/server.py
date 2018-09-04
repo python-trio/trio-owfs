@@ -73,7 +73,7 @@ class Server:
                         break
                     else:
                         msg = self.requests.popleft()
-                        msg.process_reply(res,data)
+                        msg.process_reply(res,data, self)
                         if not msg.done():
                             self.requests.appendleft(msg)
 

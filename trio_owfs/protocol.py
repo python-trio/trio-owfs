@@ -2,8 +2,10 @@
 # http://owfs.org/index.php?page=owserver-message-types
 # and 'enum msg_classification' from module/owlib/src/include/ow_message.h
 
+import attr
 import struct
 from .util import ValueEvent
+from .error import _errors, GenericOWFSReplyError
 
 import logging
 logger = logging.getLogger(__name__)
@@ -163,10 +165,14 @@ class Message:
     def _resubmit(self):
         self.event = ValueEvent()
 
-    def process_reply(self, res, data):
+    def process_reply(self, res, data, server):
         logger.debug("PROCESS %s %s %s",self,res,data)
         if res < 0:
-            raise RuntimeError("Result for %s is %d (%s)!" % (repr(self), res, repr(data)))
+            err = _errors.get(-res, GenericOWFSReplyError)
+            if err is GenericOWFSReplyError:
+                raise err(res,self, server)
+            else:
+                raise err(self, server)
         elif res > 0:
             assert len(data) == res, (data,res)
         data = self._process(data)
@@ -202,14 +208,20 @@ class NOPMsg(Message):
     def __init__(self):
         super().__init__(OWMsg.nop,b'',0)
 
+    def __repr__(self):
+        return "<%s>" % (self.__class__.__name__)
+
 class AttrGetMsg(Message):
     """read an OWFS value"""
     timeout = 2
 
     def __init__(self,*path):
-        assert path is not None
+        assert path
         self.path = path
         super().__init__(OWMsg.read,_path(self.path),8192)
+
+    def __repr__(self):
+        return "<%s %s>" % (self.__class__.__name__, '/'+'/'.join(self.path))
         
 class AttrSetMsg(Message):
     """write an OWFS value"""
@@ -222,6 +234,9 @@ class AttrSetMsg(Message):
         value = str(value).encode("utf-8")
         super().__init__(OWMsg.write,_path(self.path)+value,len(value))
 
+    def __repr__(self):
+        return "<%s %s =%s>" % (self.__class__.__name__, '/'+'/'.join(self.path), self.value)
+        
 class DirMsg(Message):
     """Read an owfs directory"""
     timeout = 10
