@@ -199,6 +199,8 @@ class Server:
         finally:
             self.stream = None
             self.service.push_event(ServerDisconnected(self))
+        for b in list(self._buses.values()):
+            b.delocate()
 
     async def dir(self, *path):
         return await self.chat(DirMsg(path))
