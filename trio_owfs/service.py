@@ -137,7 +137,7 @@ class Service:
             def __enter__(slf):
                 assert self._event_queue is None
                 self._event_queue = trio.Queue(1000)  # bus events
-                return self
+                return slf
             def __exit__(slf, *tb):
                 if tb[1] is None:
                     assert self._event_queue.is_empty()
@@ -151,19 +151,7 @@ class Service:
                     raise StopAsyncIteration
                 return res
 
-
         return EventWrapper()
-
-    def __aiter__(self):
-        if self._event_queue is None:
-            self._event_queue = trio.Queue(1000)  # bus events
-        return self
-
-    async def __anext__(self):
-        res = await self._event_queue.get()
-        if res is None:
-            raise StopAsyncIteration
-        return res
 
 @asynccontextmanager
 async def OWFS(**kwargs):
