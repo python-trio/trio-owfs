@@ -64,7 +64,7 @@ class Server:
                     except ServerBusy as exc:
                         msg = self.requests.popleft()
                         msg.process_error(exc)
-                    except (StopAsyncIteration,trio.TooSlowError):
+                    except (StopAsyncIteration,trio.TooSlowError,trio.BrokenStreamError):
                         await self._reconnect(from_reader=True)
                         break
                     except trio.ClosedResourceError:

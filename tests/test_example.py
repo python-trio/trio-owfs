@@ -8,6 +8,9 @@ from trio_owfs.bus import Bus
 
 from .mock_server import server, EventChecker
 
+import logging
+logger = logging.getLogger(__name__)
+
 # We can just use 'async def test_*' to define async tests.
 # This also uses a virtual clock fixture, so time passes quickly and
 # predictably.
@@ -239,14 +242,29 @@ async def test_basic_server():
         assert float(await dev.attr_get("temperature")) == 98.25
         await dev.attr_set("temperature", value=12.5)
 
-async def test_basic_structs():
-    async with server(tree=basic_tree) as ow:
+async def test_basic_structs(mock_clock):
+    mock_clock.autojump_threshold = 0.1
+    async with server(tree=basic_tree, options={'slow_every':[0,1],'busy_every':[0,0,1],'close_every':[0,0,0,1]}) as ow:
         await trio.sleep(0)
         dev = ow.get_device("10.345678.90")
         await ow.ensure_struct(dev)
         assert await dev.temperature == 12.5
         await dev.set_temphigh(98.25)
         assert await dev.temphigh == 98.25
+
+        # while we're at it, test our ability to do things in parallel on a broken server
+        dat = {}
+        evt = trio.Event()
+        async def get_val(tag):
+            await evt.wait()
+            dat[tag] = await getattr(dev,tag)
+        async with trio.open_nursery() as n:
+            n.start_soon(get_val,'temperature')
+            n.start_soon(get_val,'temphigh')
+            n.start_soon(get_val,'templow')
+            await trio.sleep(1)
+            evt.set()
+        assert dat == {'temphigh': 98.25, 'temperature': 12.5, 'templow': 10.0}, dat
 
 async def test_coupler_server():
     msgs = [
