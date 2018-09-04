@@ -1,3 +1,24 @@
+.. image:: https://img.shields.io/badge/chat-join%20now-blue.svg
+   :target: https://gitter.im/python-trio/general
+   :alt: Join chatroom
+
+.. image:: https://img.shields.io/badge/docs-read%20now-blue.svg
+   :target: https://trio-owfs.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
+   
+.. image:: https://img.shields.io/pypi/v/trio-owfs.svg
+   :target: https://pypi.org/project/trio-owfs
+   :alt: Latest PyPi version
+
+.. image:: https://travis-ci.org/python-trio/trio-owfs.svg?branch=master
+   :target: https://travis-ci.org/python-trio/trio
+   :alt: Automated test status
+
+.. image:: https://codecov.io/gh/python-trio/trio-owfs/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/python-trio/trio-owfs
+   :alt: Test coverage
+
+
 1wire for Trio
 ==============
 
