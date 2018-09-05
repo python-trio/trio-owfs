@@ -3,6 +3,7 @@ import pytest
 from copy import deepcopy
 
 from trio_owfs.protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg
+from trio_owfs.error import NoEntryError
 from trio_owfs.event import ServerRegistered, ServerConnected, ServerDisconnected, \
     ServerDeregistered, DeviceAdded, DeviceLocated, DeviceNotFound, BusAdded_Path, \
     BusAdded, BusDeleted
@@ -581,6 +582,19 @@ async def test_manual_device(mock_clock):
         await ow.scan_now()
         assert dev.bus is not None
 
+
+async def test_nonexistent_device(mock_clock):
+    mock_clock.autojump_threshold = 0.1
+    my_tree = deepcopy(basic_tree)
+    entry = my_tree.pop('bus.0')
+    async with server(tree=my_tree, scan=None) as ow:
+        bus = ow.test_server.get_bus('bus.0')
+        assert bus.server == ow.test_server
+
+        dev = ow.get_device('10.345678.90')
+        dev.locate(bus)
+        with pytest.raises(NoEntryError):
+            assert float(await dev.attr_get("temperature")) == 12.5
 
 async def test_manual_bus(mock_clock):
     class Checkpoint:
