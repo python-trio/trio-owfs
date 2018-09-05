@@ -32,12 +32,7 @@ class Server:
         self._wmsg = None
         self._scan_task = None
         self._buses = dict()  # path => bus
-        self._scan_done = trio.Event()
         self._scan_lock = trio.Lock()
-
-    @property
-    def scan_done(self):
-        return self._scan_done.wait()
 
     def get_bus(self, *path):
         """Return the bus at this path. Allocate new if not existing."""
@@ -218,7 +213,6 @@ class Server:
         try:
             async with self._scan_lock:
                 await self._scan_base()
-            self._scan_done.set()
             if interval > 0:
                 while True:
                     await trio.sleep(interval)

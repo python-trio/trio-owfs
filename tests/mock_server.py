@@ -208,7 +208,6 @@ async def server(tree={}, msgs=(), options={}, events=None, **kw):
                 addr = server[0].socket.getsockname()
 
                 s = await ow.add_server(*addr)
-                await s.scan_done
                 ow.test_server = s
                 yield ow
             finally:
