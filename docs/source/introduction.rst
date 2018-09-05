@@ -4,7 +4,7 @@ Introduction
 
 … or "how to talk to 1wire in five minutes"[#]_.
 
-.. [#] Setting up an `owserver <http://owfs.org/uploads/owserver.html>` instance not included.
+.. [#] Setting up an `owserver <http://owfs.org/uploads/owserver.html>`_ instance not included.
 
 First, create an OWFS instance::
 
