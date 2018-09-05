@@ -3,6 +3,7 @@ from trio_owfs import OWFS
 from trio_owfs.protocol import MessageProtocol, OWMsg
 from trio_owfs.error import OWFSReplyError, NoEntryError
 from async_generator import asynccontextmanager
+from async_generator import async_generator, yield_
 from functools import partial
 
 import logging
@@ -194,6 +195,7 @@ class EventChecker:
 
 
 @asynccontextmanager
+@async_generator
 async def server(tree={}, msgs=(), options={}, events=None, **kw):
     async with OWFS(**kw) as ow:
         async with trio.open_nursery() as n:
@@ -209,7 +211,7 @@ async def server(tree={}, msgs=(), options={}, events=None, **kw):
 
                 s = await ow.add_server(*addr)
                 ow.test_server = s
-                yield ow
+                await yield_(ow)
             finally:
                 ow.test_server = None
                 if s is not None:

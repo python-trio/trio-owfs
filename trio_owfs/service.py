@@ -2,6 +2,7 @@
 
 import trio
 from async_generator import asynccontextmanager
+from async_generator import async_generator, yield_
 
 from .server import Server
 from .device import Device
@@ -164,8 +165,9 @@ class Service:
 
 
 @asynccontextmanager
+@async_generator
 async def OWFS(**kwargs):
     async with trio.open_nursery() as n:
         s = Service(n, **kwargs)
         async with s:
-            yield s
+            await yield_(s)

@@ -105,11 +105,11 @@ class MessageProtocol:
             import pdb
             pdb.set_trace()
         if version != 0:
-            raise RuntimeError(f"Wrong version: {version}")
+            raise RuntimeError("Wrong version: %d" % (version,))
         if payload_len == -1 and data_len == 0 and offset == 0:
             raise ServerBusy
         if payload_len > self.MAX_LENGTH:
-            raise RuntimeError(f"Server tried to send too much: {payload_len}")
+            raise RuntimeError("Server tried to send too much: %d" % (payload_len,))
         if payload_len == 0:
             data_len = 0
         data = await self._read_buf(payload_len)
