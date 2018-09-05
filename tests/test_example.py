@@ -596,6 +596,7 @@ async def test_nonexistent_device(mock_clock):
         with pytest.raises(NoEntryError):
             assert float(await dev.attr_get("temperature")) == 12.5
 
+
 async def test_manual_bus(mock_clock):
     class Checkpoint:
         pass
@@ -624,7 +625,7 @@ async def test_manual_bus(mock_clock):
             ServerDeregistered,
         ]
     )
-    async with server(#msgs=msgs, events=e1,
+    async with server(  #msgs=msgs, events=e1,
             tree=basic_tree, scan=None) as ow:
         bus = ow.test_server.get_bus('bus.0')
         assert bus.server == ow.test_server
