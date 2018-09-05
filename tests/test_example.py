@@ -603,6 +603,7 @@ async def test_manual_bus(mock_clock):
     mock_clock.autojump_threshold = 0.1
     msgs = [
         NOPMsg(),
+        NOPMsg(),
         AttrGetMsg("bus.0", "10.345678.90", "temperature"),
         NOPMsg(),
         DirMsg(()),
@@ -623,21 +624,13 @@ async def test_manual_bus(mock_clock):
             ServerDeregistered,
         ]
     )
-    my_tree = deepcopy(basic_tree)
-    entry = my_tree.pop('bus.0')
-    async with server(msgs=msgs, events=e1, tree=my_tree, scan=None) as ow:
+    async with server(#msgs=msgs, events=e1,
+            tree=basic_tree, scan=None) as ow:
         bus = ow.test_server.get_bus('bus.0')
         assert bus.server == ow.test_server
 
         dev = ow.get_device('10.345678.90')
         assert dev.bus is None
-
         dev.locate(bus)
+        assert dev.bus is not None
         assert float(await dev.attr_get("temperature")) == 12.5
-
-        ow.push_event(Checkpoint())
-        await trio.sleep(15)
-        ow.push_event(Checkpoint())
-        my_tree['bus.0'] = entry
-        await ow.scan_now()
-        ow.push_event(Checkpoint())
