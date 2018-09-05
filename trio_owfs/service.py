@@ -56,8 +56,7 @@ class Service:
             raise
         else:
             self._servers.add(s)
-            if self.scan is not None:
-                await s.start_scan(self.scan)
+            await s.start_scan(self.scan)
         return s
 
     async def ensure_struct(self, dev):

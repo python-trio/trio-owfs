@@ -211,13 +211,10 @@ class Server:
 
     async def _scan(self, interval):
         try:
-            async with self._scan_lock:
-                await self._scan_base()
-            if interval > 0:
-                while True:
-                    await trio.sleep(interval)
-                    async with self._scan_lock:
-                        await self._scan_base()
+            while True:
+                await trio.sleep(interval)
+                async with self._scan_lock:
+                    await self._scan_base()
         finally:
             self._scan_task = None
 
@@ -257,7 +254,11 @@ class Server:
                 bus._unseen += 1
 
     async def start_scan(self, interval):
-        self._scan_task = await self.service.add_task(self._scan, interval)
+        if interval is None:
+            return
+        await self.scan_now()
+        if interval > 0:
+            self._scan_task = await self.service.add_task(self._scan, interval)
 
     async def attr_get(self, *path):
         return await self.chat(AttrGetMsg(*path))
