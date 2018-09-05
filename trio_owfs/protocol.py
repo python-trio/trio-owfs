@@ -123,17 +123,19 @@ class MessageProtocol:
             data = data[:data_len]
             return ret_value, data
 
-    async def write(self, typ, flags, rlen, data=b'', offset=0):
+    async def write(self, typ, flags, rlen=0, data=b'', offset=0):
         if data is None:
             logger.debug(
-                "OW send%s %x %x %x %x %x %x -", "S"
-                if self.is_server else "", 0, -1, typ, flags, rlen, offset
+                "OW send%s %x %x %x %x %x %x -",
+                    "S" if self.is_server else "",
+                    0, -1, typ, flags, rlen, offset
             )
             await self.stream.send_all(struct.pack("!6i", 0, -1, typ, flags, rlen, offset))
         else:
             logger.debug(
-                "OW send%s %x %x %x %x %x %x %s", "S"
-                if self.is_server else "", 0, len(data), typ, flags, rlen, offset, repr(data)
+                "OW send%s %x %x %x %x %x %x %s",
+                    "S" if self.is_server else "",
+                    0, len(data), typ, flags, rlen, offset, repr(data)
             )
             await self.stream.send_all(
                 struct.pack("!6i", 0, len(data), typ, flags, rlen, offset) + data
@@ -182,9 +184,11 @@ class Message:
         if res < 0:
             err = _errors.get(-res, GenericOWFSReplyError)
             if err is GenericOWFSReplyError:
-                raise err(res, self, server)
+                error = err(res, self, server)
             else:
-                raise err(self, server)
+                error = err(self, server)
+            self.event.set_error(error)
+            return
         elif res > 0:
             assert len(data) == res, (data, res)
         data = self._process(data)

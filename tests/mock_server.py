@@ -144,7 +144,7 @@ async def some_server(tree, msgs, options, socket):
                     )
             except OWFSReplyError as err:
                 logger.info("Error: %s", err)
-                await rdr.write(0, format_flags, -err.err)
+                await rdr.write(-err.err, format_flags)
 
         _end(msgs)
     except trio.BrokenStreamError:
