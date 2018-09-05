@@ -100,7 +100,7 @@ async def some_server(tree, msgs, options, socket):
                         except KeyError:
                             raise NoEntryError(command, data)
                     res = []
-                    for k, v in subtree.items():
+                    for k, v in sorted(subtree.items()):
                         k = k.encode('utf-8')
                         res.append(k)
                     if path:
