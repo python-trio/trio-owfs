@@ -37,7 +37,9 @@ structs = {
                 "bar": "i,000000,000001,rw,000012,s,",
                 "baz": {
                     "qux": "f,000000,000001,rw,000012,s,",
-                }
+                },
+                "plugh.A": "i,-00001,000001,rw,000012,s,",
+                "plover.0": "i,-00001,000001,rw,000012,s,",
             }
         },
 }
@@ -55,7 +57,13 @@ basic_tree = {
                         "bar": "42",
                         "baz": {
                             "qux": "99.875",
-                        }
+                        },
+                        "plugh.A": 1,
+                        "plugh.B": 2,
+                        "plugh.C": 3,
+                        "plover.0": 7,
+                        "plover.1": 8,
+                        "plover.2": 9,
                     }
                 }
         },
@@ -293,12 +301,6 @@ async def test_basic_structs(mock_clock):
         assert await dev.temperature == 12.5
         await dev.set_temphigh(98.25)
         assert await dev.temphigh == 98.25
-        assert await dev.foo.bar == 42
-        assert await dev.foo.baz.qux == 99.875
-        await dev.foo.set_bar(123)
-        await dev.foo.baz.set_qux(234)
-        assert await dev.foo.bar == 123
-        assert await dev.foo.baz.qux == 234
 
         # while we're at it, test our ability to do things in parallel on a broken server
         dat = {}
@@ -316,6 +318,36 @@ async def test_basic_structs(mock_clock):
             evt.set()
         assert dat == {'temphigh': 98.25, 'temperature': 12.5, 'templow': 10.0}, dat
 
+
+async def test_more_structs(mock_clock):
+    mock_clock.autojump_threshold = 0.1
+    async with server(tree=basic_tree) as ow:
+        await trio.sleep(0)
+        dev = ow.get_device("10.345678.90")
+        await ow.ensure_struct(dev)
+        assert await dev.temperature == 12.5
+        await dev.set_temphigh(98.25)
+        assert await dev.temphigh == 98.25
+        assert await dev.foo.bar == 42
+        assert await dev.foo.baz.qux == 99.875
+        assert await dev.foo.plugh[0] == 1
+        assert await dev.foo.plugh[1] == 2
+        assert await dev.foo.plugh[2] == 3
+        assert await dev.foo.plover[0] == 7
+        assert await dev.foo.plover[1] == 8
+        assert await dev.foo.plover[2] == 9
+        await dev.foo.set_bar(123)
+        await dev.foo.baz.set_qux(234)
+        await dev.foo.set_plugh(1, 11)
+        await dev.foo.set_plover(1, 111)
+        assert await dev.foo.bar == 123
+        assert await dev.foo.baz.qux == 234
+        assert await dev.foo.plugh[0] == 1
+        assert await dev.foo.plugh[1] == 11
+        assert await dev.foo.plugh[2] == 3
+        assert await dev.foo.plover[0] == 7
+        assert await dev.foo.plover[1] == 111
+        assert await dev.foo.plover[2] == 9
 
 async def test_coupler_server():
     msgs = [

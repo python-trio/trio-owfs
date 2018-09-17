@@ -83,6 +83,10 @@ class ArrayGetter:
     def __get__(slf, self, cls):
         class IdxObj:
             async def __getitem__(sl, idx):
+                if slf.num:
+                    idx = str(idx)
+                else:
+                    idx = chr(ord('A')+idx)
                 p = slf.path[:-1] + (slf.path[-1]+'.'+idx,)
                 res = await self.dev.attr_get(*p)
                 if slf.typ in {'f', 'g', 'p', 't'}:
@@ -106,10 +110,10 @@ class ArraySetter:
 
     def __get__(slf, self, cls):
         async def setter(idx, val):
-            if self.num:
-                idx = str(num)
+            if slf.num:
+                idx = str(idx)
             else:
-                idx = chr(ord('A')+num)
+                idx = chr(ord('A')+idx)
             p = slf.path[:-1] + (slf.path[-1]+'.'+idx,)
             if slf.typ == 'b':
                 pass
@@ -182,9 +186,9 @@ async def setup_accessors(server, cls, typ, *subdir):
                 d = d[:-2]
                 dd = subdir + (d,)
                 if v[3] in {'ro', 'rw'}:
-                    setattr(cls, d, ArrayGetter(dd, v[0]))
+                    setattr(cls, d, ArrayGetter(dd, v[0], num))
                 if v[3] in {'wo', 'rw'}:
-                    setattr(cls, 'set_' + d, ArraySetter(dd, v[0]))
+                    setattr(cls, 'set_' + d, ArraySetter(dd, v[0], num))
 
 
 
