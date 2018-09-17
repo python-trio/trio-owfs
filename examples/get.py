@@ -29,6 +29,7 @@ import collections
 
 import trio_click as click
 from trio_owfs import OWFS
+import trio_owfs.error as err
 
 import logging
 logger = logging.getLogger('examples.walk')
@@ -61,7 +62,13 @@ async def main(host, port, debug, id, attr):
             dev = ow.get_device(id)
             if dev.bus is None:
                 print("Device not found", file=sys.stderr)
-        print((await dev.attr_get(*attr)).decode("utf-8").strip())
+        try:
+            print((await dev.attr_get(*attr)).decode("utf-8").strip())
+        except err.IsDirError:
+            print("-dir-")
+            for d in await dev.dir(*attr):
+                print(d)
+
 
 
 if __name__ == '__main__':
