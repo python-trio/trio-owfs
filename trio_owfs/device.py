@@ -172,23 +172,25 @@ async def setup_accessors(server, cls, typ, *subdir):
             v[2] = int(v[2])
             v[4] = int(v[4])
             if v[1] == 0:
-                if v[3] in {'ro', 'rw'}:
-                    setattr(cls, d, SimpleGetter(dd, v[0]))
-                if v[3] in {'wo', 'rw'}:
-                    setattr(cls, 'set_' + d, SimpleSetter(dd, v[0]))
-            elif v[1] == -1:
                 if d.endswith('.0'):
                     num = True
                 elif d.endswith('.A'):
                     num = False
                 else:
-                    continue
-                d = d[:-2]
-                dd = subdir + (d,)
-                if v[3] in {'ro', 'rw'}:
-                    setattr(cls, d, ArrayGetter(dd, v[0], num))
-                if v[3] in {'wo', 'rw'}:
-                    setattr(cls, 'set_' + d, ArraySetter(dd, v[0], num))
+                    num = None
+
+                if num is None:
+                    if v[3] in {'ro', 'rw'}:
+                        setattr(cls, d, SimpleGetter(dd, v[0]))
+                    if v[3] in {'wo', 'rw'}:
+                        setattr(cls, 'set_' + d, SimpleSetter(dd, v[0]))
+                else:
+                    d = d[:-2]
+                    dd = subdir + (d,)
+                    if v[3] in {'ro', 'rw'}:
+                        setattr(cls, d, ArrayGetter(dd, v[0], num))
+                    if v[3] in {'wo', 'rw'}:
+                        setattr(cls, 'set_' + d, ArraySetter(dd, v[0], num))
 
 
 
