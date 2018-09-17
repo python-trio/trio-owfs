@@ -6,6 +6,7 @@ import attr
 from functools import partial
 
 from .event import DeviceLocated, DeviceNotFound
+from .error import IsDirError
 
 import logging
 logger = logging.getLogger(__name__)
@@ -37,8 +38,157 @@ def split_id(id):
         raise NotADevice(id)
     return a, b, c
 
+@attr.s
+class SimpleGetter:
+    path = attr.ib()
+    typ = attr.ib()
 
-class Device:
+    async def __get__(slf, self, cls):
+        res = await self.dev.attr_get(*slf.path)
+        if slf.typ in {'f', 'g', 'p', 't'}:
+            res = float(res)
+        elif slf.typ in {'i', 'u'}:
+            res = int(res)
+        elif slf.typ == 'y':
+            res = bool(int(res))
+        elif slf.typ == 'b':
+            pass
+        else:
+            res = res.decode('utf-8')
+        return res
+
+@attr.s
+class SimpleSetter:
+    path = attr.ib()
+    typ = attr.ib()
+
+    def __get__(slf, self, cls):
+        async def setter(val):
+            if slf.typ == 'b':
+                pass
+            elif slf.typ == 'y':
+                val = b'1' if val else b'0'
+            else:
+                val = str(val).encode("utf-8")
+            await self.dev.attr_set(*slf.path, value=val)
+
+        return setter
+
+@attr.s
+class ArrayGetter:
+    path = attr.ib()
+    typ = attr.ib()
+    num = attr.ib()
+
+    def __get__(slf, self, cls):
+        class IdxObj:
+            async def __getitem__(sl, idx):
+                p = slf.path[:-1] + (slf.path[-1]+'.'+idx,)
+                res = await self.dev.attr_get(*p)
+                if slf.typ in {'f', 'g', 'p', 't'}:
+                    res = float(res)
+                elif slf.typ in {'i', 'u'}:
+                    res = int(res)
+                elif slf.typ == 'y':
+                    res = bool(int(res))
+                elif slf.typ == 'b':
+                    pass
+                else:
+                    res = res.decode('utf-8')
+                return res
+        return IdxObj()
+
+@attr.s
+class ArraySetter:
+    path = attr.ib()
+    typ = attr.ib()
+    num = attr.ib()
+
+    def __get__(slf, self, cls):
+        async def setter(idx, val):
+            if self.num:
+                idx = str(num)
+            else:
+                idx = chr(ord('A')+num)
+            p = slf.path[:-1] + (slf.path[-1]+'.'+idx,)
+            if slf.typ == 'b':
+                pass
+            elif slf.typ == 'y':
+                val = b'1' if val else b'0'
+            else:
+                val = str(val).encode("utf-8")
+            await self.dev.attr_set(*p, value=val)
+        return setter
+
+class SubDir:
+    _subdirs = set()
+    # dev = None  # needs to be filled by subclass
+    def __getattr__(self, name):
+        if name not in self._subdirs:
+            return super().__getattribute__(name)
+        c = getattr(self,'_cls_'+name)(self)
+        c.dev = self.dev
+        return c
+
+async def setup_accessors(server, cls, typ, *subdir):
+    for d in await server.dir("structure", typ, *subdir):
+        dd = subdir + (d,)
+        try:
+            v = await server.attr_get("structure", typ, *dd)
+        except IsDirError:
+
+            t = typ
+            class SubPath(SubDir):
+                typ = t
+                subdir = dd
+                def __init__(self, base):
+                    self.base = base
+                def __repr__(self):
+                    return "<%s %s %s>" % (self.__class__.__name, self.base, self.subdir)
+                def __get__(self, obj, cls):
+                    if obj is None:
+                        return cls
+                    try:
+                        return getattr(obj,"_"+self.dd[-1])
+                    except AttributeError:
+                        c = getattr(cls, '_cls_'+d)()
+                        setattr(obj,"_"+self.dd[-1], c)
+                        import pdb;pdb.set_trace()
+                        c.dev = obj.dev
+                        return c
+
+            SubPath.__name__ = '_cls_'+d
+            setattr(cls, '_cls_'+d, SubPath)
+            cls._subdirs.add(d)
+            await setup_accessors(server, SubPath, typ, *dd)
+            
+        else:
+            v = v.decode("utf-8").split(",")
+            v[1] = int(v[1])
+            v[2] = int(v[2])
+            v[4] = int(v[4])
+            if v[1] == 0:
+                if v[3] in {'ro', 'rw'}:
+                    setattr(cls, d, SimpleGetter(dd, v[0]))
+                if v[3] in {'wo', 'rw'}:
+                    setattr(cls, 'set_' + d, SimpleSetter(dd, v[0]))
+            elif v[1] == -1:
+                if d.endswith('.0'):
+                    num = True
+                elif d.endswith('.A'):
+                    num = False
+                else:
+                    continue
+                d = d[:-2]
+                dd = subdir + (d,)
+                if v[3] in {'ro', 'rw'}:
+                    setattr(cls, d, ArrayGetter(dd, v[0]))
+                if v[3] in {'wo', 'rw'}:
+                    setattr(cls, 'set_' + d, ArraySetter(dd, v[0]))
+
+
+
+class Device(SubDir):
     """Base class for devices.
 
     A device may or may not have a known location.
@@ -47,6 +197,10 @@ class Device:
 
     def __init__(self, service, id):
         logger.debug("NewDev %s", id)
+
+    @property
+    def dev(self):
+        return self
 
     def __new__(cls, service, id):
         family_id, code, chksum = split_id(id)
@@ -79,58 +233,13 @@ class Device:
         """Read the device's structural data from OWFS
         and add methods to access the fields"""
 
-        @attr.s
-        class SimpleGetter:
-            name = attr.ib()
-            typ = attr.ib()
-
-            async def __get__(slf, self, cls):
-                res = await self.attr_get(slf.name)
-                if slf.typ in {'f', 'g', 'p', 't'}:
-                    res = float(res)
-                elif slf.typ in {'i', 'u'}:
-                    res = int(res)
-                elif slf.typ == 'y':
-                    res = bool(int(res))
-                elif slf.typ == 'b':
-                    pass
-                else:
-                    res = res.decode('utf-8')
-                return res
-
-        @attr.s
-        class SimpleSetter:
-            name = attr.ib()
-            typ = attr.ib()
-
-            def __get__(slf, self, cls):
-                async def setter(self, typ, name, val):
-                    if typ == 'b':
-                        pass
-                    elif typ == 'y':
-                        val = b'1' if val else b'0'
-                    else:
-                        val = str(val).encode("utf-8")
-                    await self.attr_set(name, value=val)
-
-                return partial(setter, self, slf.typ, slf.name)
-
         if cls._did_setup is not False:
             return
         cls._did_setup = None
 
         try:
             fc = "%02X" % (cls.family)
-            for d in await server.dir("structure", fc):
-                try:
-                    v = await server.attr_get("structure", fc, d)
-                    v = v.decode("utf-8").split(",")
-                    if v[3] in {'ro', 'rw'}:
-                        setattr(cls, d, SimpleGetter(d, v[0]))
-                    if v[3] in {'wo', 'rw'}:
-                        setattr(cls, 'set_' + d, SimpleSetter(d, v[0]))
-                except Exception:
-                    raise
+            await setup_accessors(server, cls, fc)
 
         except BaseException:
             cls._did_setup = False

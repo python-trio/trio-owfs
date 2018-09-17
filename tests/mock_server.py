@@ -1,7 +1,7 @@
 import trio
 from trio_owfs import OWFS
 from trio_owfs.protocol import MessageProtocol, OWMsg
-from trio_owfs.error import OWFSReplyError, NoEntryError
+from trio_owfs.error import OWFSReplyError, NoEntryError, IsDirError
 from async_generator import asynccontextmanager
 from async_generator import async_generator, yield_
 from functools import partial
@@ -120,8 +120,10 @@ async def some_server(tree, msgs, options, socket):
                             res = res[k]
                         except KeyError:
                             raise NoEntryError(command, data)
-                    assert not isinstance(res, dict)
-                    res = res.encode('utf-8')
+                    if isinstance(res, dict):
+                        raise IsDirError(command, data)
+                    if not isinstance(res, bytes):
+                        res = str(res).encode('utf-8')
                     await rdr.write(0, format_flags, len(res), res + b'\0')
                 elif command == OWMsg.write:
                     val = data[-offset:].decode("utf-8")
