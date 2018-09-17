@@ -54,7 +54,14 @@ You can also ask by device ID, and get/set attributes if the device is present::
         heat = await dev.temperature
         await dev.set_temphigh(99)
 
-Note that all IDs are in FDIDC for (family, dot, ID, dot, checksum).
+This includes elements in subdirectories and array members::
+
+        await dev.voltage[2]
+        await dev.set_PIO(3, True)
+        
+        await dev.T8A.volt[0]
+
+Note that all IDs are in FDIDC format (family, dot, ID, dot, checksum).
 
 You can arrange for periodic bus scans, or trigger them yourself::
 
