@@ -52,7 +52,6 @@ async def main(host, port, debug):
         if debug:
             await ow.add_task(mon, ow)
         s = await ow.add_server(host, port)
-        await s.scan_done
 
 if __name__ == '__main__':
     main()

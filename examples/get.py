@@ -54,7 +54,6 @@ async def main(host, port, debug, id, attr):
         if debug:
             await ow.add_task(mon, ow)
         s = await ow.add_server(host, port)
-        await s.scan_done
         attr = [k for k in attr.split('/') if k]
         if id == '-':
             dev = s

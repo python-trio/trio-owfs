@@ -55,7 +55,6 @@ async def main(host, port, debug, id, attr, data):
         if debug:
             await ow.add_task(mon, ow)
         s = await ow.add_server(host, port)
-        await s.scan_done
         dev = ow.get_device(id)
         if dev.bus is None:
             print("Device not found", file=sys.stderr)
