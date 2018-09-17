@@ -162,6 +162,7 @@ class Server:
                     except trio.TooSlowError:
                         self._wmsg = NOPMsg()
 
+                self.requests.append(self._wmsg)
                 try:
                     await self._wmsg.write(self._msg_proto)
                 except trio.ClosedResourceError:
@@ -171,7 +172,6 @@ class Server:
                     await self.stream.aclose()
                     return  # wil be restarted by the reader
                 else:
-                    self.requests.append(self._wmsg)
                     self._wmsg = None
 
     async def drop(self):
