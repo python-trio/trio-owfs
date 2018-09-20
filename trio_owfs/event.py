@@ -110,3 +110,18 @@ class DeviceLocated(DeviceEvent):
 class DeviceNotFound(DeviceEvent):
     """The device's location is no longer known"""
     device = attr.ib()
+
+
+@attr.s
+class DeviceAlarm(DeviceEvent):
+    """The device triggered an alarm condition."""
+    device = attr.ib()
+
+
+@attr.s
+class DeviceValue(DeviceEvent):
+    """The device poll has read a value."""
+    device = attr.ib()
+    attribute = attr.ib()
+    value = attr.ib()
+

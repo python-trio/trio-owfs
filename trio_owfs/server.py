@@ -4,6 +4,7 @@ Access to an owserver.
 
 import trio
 from collections import deque
+from random import random
 
 from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded
@@ -209,16 +210,17 @@ class Server:
     async def dir(self, *path):
         return await self.chat(DirMsg(path))
 
-    async def _scan(self, interval):
+    async def _scan(self, interval, polling):
         try:
             while True:
-                await trio.sleep(interval)
+                # 5% variation, to prevent clustering
+                await trio.sleep(interval*(1+(random()-0.5)/10))
                 async with self._scan_lock:
-                    await self._scan_base()
+                    await self._scan_base(polling=polling)
         finally:
             self._scan_task = None
 
-    async def scan_now(self, task_status=trio.TASK_STATUS_IGNORED):
+    async def scan_now(self, polling=True, task_status=trio.TASK_STATUS_IGNORED):
         task_status.started()
         if self._scan_lock.locked():
             # scan in progress: just wait for it to finish
@@ -226,9 +228,9 @@ class Server:
                 pass
         else:
             async with self._scan_lock:
-                await self._scan_base()
+                await self._scan_base(polling=polling)
 
-    async def _scan_base(self):
+    async def _scan_base(self, polling=True):
         old_paths = set()
 
         # step 1: enumerate
@@ -240,7 +242,7 @@ class Server:
                     old_paths.remove(d)
                 except KeyError:
                     pass
-                buses = await bus._scan_one()
+                buses = await bus._scan_one(polling=polling)
                 old_paths -= buses
 
         # step 2: deregister buses, if not seen often enough
@@ -253,12 +255,23 @@ class Server:
             else:
                 bus._unseen += 1
 
-    async def start_scan(self, interval):
+    async def start_scan(self, interval, polling=True):
+        """Scan this server.
+
+        :param interval: Flag how often to re-scan the bus.
+            None: don't scan at all, return immediately.
+            Zero: scan once, return after scan is complete.
+            >0: return after the first scan, but also start a background
+            tasks that re-scans every ``interval`` seconds
+        :type interval: :class:`int` or ``None``
+        :param polling: Flag whether to start tasks for periodic polling
+            (alarm handling, temperature, …). Defaults to ``True``.
+        """
         if interval is None:
             return
-        await self.scan_now()
+        await self.scan_now(polling=polling)
         if interval > 0:
-            self._scan_task = await self.service.add_task(self._scan, interval)
+            self._scan_task = await self.service.add_task(self._scan, interval, polling)
 
     async def attr_get(self, *path):
         return await self.chat(AttrGetMsg(*path))

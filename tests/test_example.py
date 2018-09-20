@@ -543,7 +543,8 @@ async def test_disconnecting_server_2(mock_clock):
         await trio.sleep(0)
 
 
-async def test_dropped_device():
+async def test_dropped_device(mock_clock):
+    mock_clock.autojump_threshold = 0.1
     msgs = [
         NOPMsg(),
         DirMsg(()),
@@ -571,19 +572,20 @@ async def test_dropped_device():
         ]
     )
     my_tree = deepcopy(basic_tree)
-    async with server(msgs=msgs, events=e1, tree=my_tree) as ow:
-        await trio.sleep(0)
-        del my_tree['bus.0']['10.345678.90']
+    async with server(tree=my_tree, msgs=msgs, events=e1) as ow:
         dev = ow.get_device('10.345678.90')
+        assert dev.bus is not None
+        del my_tree['bus.0']['10.345678.90']
         assert dev._unseen == 0
-        await ow.scan_now()
+
+        await ow.scan_now(polling=False)
         assert dev._unseen == 1
-        await ow.scan_now()
+        await ow.scan_now(polling=False)
         assert dev._unseen == 2
-        await ow.scan_now()
+        await ow.scan_now(polling=False)
         assert dev._unseen == 3
         assert dev.bus is not None
-        await ow.scan_now()
+        await ow.scan_now(polling=False)
         assert dev._unseen == 3
         assert dev.bus is None
 
@@ -625,7 +627,7 @@ async def test_manual_device(mock_clock):
         await trio.sleep(15)
         ow.push_event(Checkpoint())
         my_tree['bus.0']['10.345678.90'] = entry
-        await ow.scan_now()
+        await ow.scan_now(polling=False)
         assert dev.bus is not None
 
 

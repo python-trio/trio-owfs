@@ -1,6 +1,7 @@
 # base implementation
 
 import trio
+from functools import partial
 from async_generator import asynccontextmanager
 from async_generator import async_generator, yield_
 
@@ -46,7 +47,7 @@ class Service:
         self._event_queue = None  # typ.Optional[trio.Queue]
         self.scan = scan
 
-    async def add_server(self, host: str, port: int = 4304):
+    async def add_server(self, host: str, port: int = 4304, polling: bool = True):
         s = Server(self, host, port)
         self.push_event(ServerRegistered(s))
         try:
@@ -57,7 +58,7 @@ class Service:
             raise
         else:
             self._servers.add(s)
-            await s.start_scan(self.scan)
+            await s.start_scan(self.scan, polling=polling)
         return s
 
     async def ensure_struct(self, dev):
@@ -94,12 +95,12 @@ class Service:
                 except KeyError:
                     pass
 
-    async def scan_now(self, task_status=trio.TASK_STATUS_IGNORED):
+    async def scan_now(self, polling=True, task_status=trio.TASK_STATUS_IGNORED):
         """Scan the whole system."""
         task_status.started()
         async with trio.open_nursery() as n:
             for s in list(self._servers):
-                await n.start(s.scan_now)
+                await n.start(partial(s.scan_now, polling=polling))
 
     async def add_task(self, proc, *args):
         """

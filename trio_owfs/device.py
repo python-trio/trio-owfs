@@ -5,7 +5,7 @@ Devices.
 import attr
 from functools import partial
 
-from .event import DeviceLocated, DeviceNotFound
+from .event import DeviceLocated, DeviceNotFound, DeviceValue
 from .error import IsDirError
 
 import logging
@@ -165,7 +165,7 @@ async def setup_accessors(server, cls, typ, *subdir):
             setattr(cls, '_cls_'+d, SubPath)
             cls._subdirs.add(d)
             await setup_accessors(server, SubPath, typ, *dd)
-            
+
         else:
             v = v.decode("utf-8").split(",")
             v[1] = int(v[1])
@@ -200,7 +200,7 @@ class Device(SubDir):
     A device may or may not have a known location.
     """
     _did_setup = False
-
+    
     def __init__(self, service, id):
         logger.debug("NewDev %s", id)
 
@@ -295,6 +295,40 @@ class Device(SubDir):
             raise NoLocationKnown(self)
         return await self.bus.attr_set(*((self.id,) + attr), value=value)
 
+    def polling_items(self):
+        """Enumerate poll variants supported by this device.
+        
+        This is a generator. If you override, call::
+
+            yield from super().polling_items()
+
+        See the associated ``poll_<name>`` methods on
+        :class:`trio_owfs.bus.Bus` for details.
+
+        Special return values:
+
+        * "alarm": you need to implement ``.stop_alarm``
+        """
+        if False:
+            yield None
+
+    def polling_interval(self, typ):
+        """Return the interval WRT how often to poll for this type.
+
+        The default implementation looks up the "interval_<typ>" attribute
+        or returns ``None`` if that doesn't exist.
+        """
+        return getattr(self, "interval_"+typ, None)
+    
+    async def poll_alarm(self):
+        """Tells the device not to trigger an alarm any more.
+
+        You *need* to override this if your device can trigger an alarm
+        condition. Also, this method *must* disable the alarm; your
+        application can re-enable it later, when processing the
+        :class:`trio_owfs.event.DeviceAlarm` event.
+        """
+        raise NotImplementedError("<%s> needs 'stop_alarm'" % (self.__class__.__name__,))
 
 @register
 class SwitchDevice(Device):
@@ -310,10 +344,25 @@ class SwitchDevice(Device):
 @register
 class TemperatureDevice(Device):
     family = 0x10
+    interval_temperature = 60
+    interval_alarm = 60
+    alarm_temperature = None
 
-    async def stop_alarm(self):
+    async def poll_alarm(self):
         t = await self.latesttemp
+        self.alarm_temperature = t
+
         if t > (await self.temphigh):
             await self.set_temphigh(int(t + 2))
         if t < (await self.templow):
             await self.set_templow(int(t - 1))
+
+    def polling_items(self):
+        yield from super().polling_items()
+        yield "temperature"
+        yield "alarm"
+
+    async def poll_temperature(self):
+        t = await self.latesttemp
+        self.service.push_event(DeviceValue(self, "temperature", t))
+

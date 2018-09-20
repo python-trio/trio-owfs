@@ -203,7 +203,7 @@ class EventChecker:
 
 @asynccontextmanager
 @async_generator
-async def server(tree={}, msgs=(), options={}, events=None, **kw):
+async def server(tree={}, msgs=(), options={}, events=None, polling=False, **kw):
     async with OWFS(**kw) as ow:
         async with trio.open_nursery() as n:
             s = None
@@ -216,7 +216,7 @@ async def server(tree={}, msgs=(), options={}, events=None, **kw):
                     await n.start(events, ow)
                 addr = server[0].socket.getsockname()
 
-                s = await ow.add_server(*addr)
+                s = await ow.add_server(*addr, polling=polling)
                 ow.test_server = s
                 await yield_(ow)
             finally:
