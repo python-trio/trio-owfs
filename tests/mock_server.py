@@ -135,9 +135,14 @@ async def some_server(tree, msgs, options, socket):
                         if k == b'':
                             continue
                         if last is not None:
-                            res = res[last]
+                            try:
+                                res = res[last]
+                            except KeyError:
+                                raise NoEntryError(command, data)
                         last = k.decode("utf-8")
                     assert last is not None
+                    if last not in res:
+                        raise NoEntryError(command, data)
                     res[last] = val
                     await rdr.write(0, format_flags, 0)
                 else:
