@@ -45,11 +45,17 @@ your configuration file.
 
 You can also ask by device ID, and get/set attributes if the device is present::
 
-    dev = await ow.get_device("10.DBDB39010800.EF")
-    # triggers a :class:`trio_owfs.event.DeviceAdded` event if not yet known
-    if dev.bus is not None:
-        # make sure that the data accessor methods are loaded
+    dev = ow.get_device("10.DBDB39010800.EF")
+    # this call triggers a :class:`trio_owfs.event.DeviceAdded` event
+    # if the device is not yet known
+
+    if dev.bus is None:
+        # generate data accessor methods (if you need them for introspection)
         await ow.ensure_struct(dev)
+
+    else:
+        # The device has been found on a bus
+        # data accessors have been auto-loaded (this can be disabled)
 
         heat = await dev.temperature
         await dev.set_temphigh(99)
@@ -61,7 +67,7 @@ This includes elements in subdirectories and array members::
         
         await dev.T8A.volt[0]
 
-Note that all IDs are in FDIDC format (family, dot, ID, dot, checksum).
+Note that all 1wire IDs are in FDIDC format (family, dot, ID, dot, checksum).
 
 You can arrange for periodic bus scans, or trigger them yourself::
 
