@@ -157,7 +157,6 @@ async def setup_accessors(server, cls, typ, *subdir):
                     except AttributeError:
                         c = getattr(cls, '_cls_'+d)()
                         setattr(obj,"_"+self.dd[-1], c)
-                        import pdb;pdb.set_trace()
                         c.dev = obj.dev
                         return c
 
