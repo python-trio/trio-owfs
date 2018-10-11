@@ -5,6 +5,8 @@ from functools import partial
 from async_generator import asynccontextmanager
 from async_generator import async_generator, yield_
 
+from typing import Optional
+
 from .server import Server
 from .device import Device
 from .event import ServerRegistered, ServerDeregistered
@@ -29,25 +31,32 @@ class Service:
                 await ow.add_task(rdr, ow)
                 s = await ow.add_server("localhost",4304")
 
-        Parameters:
+        :param scan: time between directory scanning.
 
-            scan: time between directory scans.
-                0: only after connecting
-                None: do not scan
+            0: only after connecting (default)
+            None: do not scan at all
 
-        NB: trio-OWFS is opinionated. Device codes will contain checksums,
-        temperature is in degC, pressure is in mbar.
         """
 
-    def __init__(self, nursery, scan=0):
+    def __init__(self, nursery, scan: Optional[int] = 0, load_structs: bool = True):
         self.nursery = nursery
         self._servers = set()  # typ.MutableSet[Server]  # Server
         self._devices = dict()  # ID => Device
         self._tasks = set()  # typ.MutableSet[]  # actually their cancel scopes
         self._event_queue = None  # typ.Optional[trio.Queue]
         self.scan = scan
+        self._load_structs = load_structs
 
-    async def add_server(self, host: str, port: int = 4304, polling: bool = True):
+    async def add_server(self, host: str, port: int = 4304, polling: bool = True,
+            scan = -1):
+        """Add this server to the list.
+        
+        :param polling: if False, don't poll.
+        :param scan: Override ``self.scan``.
+        """
+        if scan == -1:
+            scan = self.scan
+
         s = Server(self, host, port)
         self.push_event(ServerRegistered(s))
         try:
@@ -58,30 +67,41 @@ class Service:
             raise
         else:
             self._servers.add(s)
-            await s.start_scan(self.scan, polling=polling)
+            await s.start_scan(scan, polling=polling)
         return s
 
-    async def ensure_struct(self, dev):
+    async def ensure_struct(self, dev, server=None, maybe=False):
+        """
+        Load a device's class's structure definition from any server.
+
+        :param dev: The device whose class to set up
+        :param server: Try this server, not all of them
+        :param maybe: if set, don't load if ``load_structs`` is set
+
+        """
+        if maybe and not self._load_structs:
+            return
         cls = type(dev)
         if cls._did_setup:
             return
-        for s in list(self._servers):
-            await cls.setup_struct(s)
-            return
-
-    def add_device(self, dev, bus=None):
-        """Add a device, possibly seen on a bus."""
-        self._devices[dev.id] = dev
-        self.push_event(DeviceAdded(dev))
-        if bus is not None:
-            dev.locate(bus)
+        if server is not None:
+            await cls.setup_struct(server)
+        else:
+            for s in list(self._servers):
+                await cls.setup_struct(s)
+                return
 
     def get_device(self, id):
+        """
+        Return the :class:`trio_owfs.device.Device` instance for the device
+        with this ID. Create it if it doesn't exist (this will trigger a .
+        """
         try:
             return self._devices[id]
         except KeyError:
             dev = Device(self, id)
-            self.add_device(dev)
+            self._devices[dev.id] = dev
+            self.push_event(DeviceAdded(dev))
             return dev
 
     async def _add_task(self, proc, *args, task_status=trio.TASK_STATUS_IGNORED):
@@ -96,7 +116,11 @@ class Service:
                     pass
 
     async def scan_now(self, polling=True, task_status=trio.TASK_STATUS_IGNORED):
-        """Scan the whole system."""
+        """
+        Task to scan the whole system.
+        
+        :param polling: if False, do not add polling tasks
+        """
         task_status.started()
         async with trio.open_nursery() as n:
             for s in list(self._servers):

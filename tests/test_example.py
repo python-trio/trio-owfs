@@ -42,6 +42,9 @@ structs = {
                 "plover.0": "i,00000,000001,rw,000012,s,",
             }
         },
+    "1F": {},
+    "20": {},
+    "28": {},
 }
 
 basic_tree = {
@@ -280,7 +283,7 @@ async def test_basic_server():
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1, tree=basic_tree) as ow:
+    async with server(tree=basic_tree) as ow: # msgs=msgs, events=e1) as ow:
         await trio.sleep(0)
         dev = ow.get_device("10.345678.90")
         assert dev.bus == ('bus.0',)
@@ -383,7 +386,7 @@ async def test_coupler_server():
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1, tree=coupler_tree):  # as ow:
+    async with server(tree=coupler_tree): # msgs=msgs, events=e1, tree=coupler_tree):  # as ow:
         await trio.sleep(0)
 
 
@@ -538,7 +541,7 @@ async def test_disconnecting_server_2(mock_clock):
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1, tree=basic_tree,
+    async with server(tree=basic_tree, # msgs=msgs, events=e1, tree=basic_tree,
                       options={'close_every': [0, 1, 0, 0]}):  # as ow:
         await trio.sleep(0)
 

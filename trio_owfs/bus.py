@@ -86,13 +86,13 @@ class Bus:
                 logger.debug("Not a device: %s", err)
                 continue
             dev = self.service.get_device(d)
+            await self.service.ensure_struct(dev, server=self.server, maybe=True)
             if dev.bus is self:
                 old_devs.remove(d)
             else:
                 self.add_device(dev)
             dev._unseen = 0
             logger.debug("Found %s/%s", '/'.join(self.path), d)
-            self.add_device(dev)
             for b in dev.buses():
                 buses.add(b)
                 bus = self.get_bus(*b)
@@ -134,10 +134,11 @@ class Bus:
     async def _poll(self, name, task_status=trio.TASK_STATUS_IGNORED):
         """Task to run a specific poll in the background"""
         task_status.started()
-        await trio.sleep(self._intervals[name]/10 * random())
         while True:
+            i = self._intervals[name] * (1+(random()-0.5)/20)
+            logger.info("Delay %s for %f" % (name,i))
+            await trio.sleep(i)
             await self.poll(name)
-            await trio.sleep(self._intervals[name])
 
     def add_device(self, dev):
         dev.locate(self)
@@ -186,7 +187,7 @@ class Bus:
 
     async def _poll_simul(self, name, delay):
         """Write to a single 'simultaneous' entry"""
-        await self.attr_set("simultaneous", "name", value=1)
+        await self.attr_set("simultaneous", name, value=1)
         await trio.sleep(delay)
         for dev in self.devices:
             try:
@@ -199,8 +200,4 @@ class Bus:
     def poll_temperature(self):
         """Read all temperature data"""
         return self._poll_simul("temperature", 1.2)
-
-    def poll_temperature(self):
-        """Read all voltage data"""
-        return self._poll_simul("voltage", 1.2)
 
