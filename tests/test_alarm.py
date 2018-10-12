@@ -10,6 +10,7 @@ from trio_owfs.event import ServerRegistered, ServerConnected, ServerDisconnecte
 from trio_owfs.bus import Bus
 
 from .mock_server import server, EventChecker
+from .structs import structs
 
 import logging
 logger = logging.getLogger(__name__)
@@ -17,24 +18,6 @@ logger = logging.getLogger(__name__)
 # We can just use 'async def test_*' to define async tests.
 # This also uses a virtual clock fixture, so time passes quickly and
 # predictably.
-
-structs = {
-    "10":
-        {
-            "address": "a,000000,000001,ro,000016,f,",
-            "alias": "l,000000,000001,rw,000256,f,",
-            "crc8": "a,000000,000001,ro,000002,f,",
-            "family": "a,000000,000001,ro,000002,f,",
-            "id": "a,000000,000001,ro,000012,f,",
-            "latesttemp": "t,000000,000001,ro,000012,v,",
-            "locator": "a,000000,000001,ro,000016,f,",
-            "power": "y,000000,000001,ro,000001,v,",
-            "temperature": "t,000000,000001,ro,000012,v,",
-            "temphigh": "t,000000,000001,rw,000012,s,",
-            "templow": "t,000000,000001,rw,000012,s,",
-            "type": "a,000000,000001,ro,000032,f,",
-        },
-}
 
 basic_tree = {
     "bus.0":
