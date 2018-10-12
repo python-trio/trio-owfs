@@ -15,7 +15,7 @@ setup(
     license="MIT -or- Apache License 2.0",
     packages=find_packages(),
     install_requires=[
-        "trio",
+        "anyio",
     ],
     keywords=[
         "trio",

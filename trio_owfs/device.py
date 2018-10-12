@@ -302,7 +302,7 @@ class Device(SubDir):
             yield from super().polling_items()
 
         See the associated ``poll_<name>`` methods on
-        :class:`trio_owfs.bus.Bus` for details.
+        :class:`anyio_owfs.bus.Bus` for details.
 
         Special return values:
 
@@ -325,7 +325,7 @@ class Device(SubDir):
         You *need* to override this if your device can trigger an alarm
         condition. Also, this method *must* disable the alarm; your
         application can re-enable it later, when processing the
-        :class:`trio_owfs.event.DeviceAlarm` event.
+        :class:`anyio_owfs.event.DeviceAlarm` event.
         """
         raise NotImplementedError("<%s> needs 'stop_alarm'" % (self.__class__.__name__,))
 

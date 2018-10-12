@@ -2,7 +2,8 @@
 Access to an owserver.
 """
 
-import trio
+import anyio
+from anyio.exceptions import IncompleteRead
 from collections import deque
 from random import random
 
@@ -10,6 +11,7 @@ from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded
 from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg, MessageProtocol, ServerBusy, Retry
 from .bus import Bus
+from .util import ValueEvent
 
 import logging
 logger = logging.getLogger(__name__)
@@ -27,13 +29,13 @@ class Server:
         self.stream = None
         self._msg_proto = None
         self.requests = deque()
-        self._wlock = trio.Lock()
-        self._connect_lock = trio.Lock()
-        self._wqueue = trio.Queue(10)
+        self._wlock = anyio.create_lock()
+        self._connect_lock = anyio.create_lock()
+        self._wqueue = anyio.create_queue(10)
         self._wmsg = None
         self._scan_task = None
         self._buses = dict()  # path => bus
-        self._scan_lock = trio.Lock()
+        self._scan_lock = anyio.create_lock()
 
     def get_bus(self, *path):
         """Return the bus at this path. Allocate new if not existing."""
@@ -50,26 +52,26 @@ class Server:
             self.__class__.__name__, self.host, self.port, "OK" if self.stream else "closed"
         )
 
-    async def _reader(self, task_status=trio.TASK_STATUS_IGNORED):
-        with trio.open_cancel_scope() as scope:
-            task_status.started(scope)
+    async def _reader(self, val):
+        async with anyio.open_cancel_scope() as scope:
+            await val.set(scope)
             while True:
                 it = self._msg_proto.__aiter__()
                 while True:
                     try:
-                        with trio.fail_after(15):
+                        async with anyio.fail_after(15):
                             res, data = await it.__anext__()
                     except ServerBusy as exc:
                         msg = self.requests.popleft()
-                        msg.process_error(exc)
-                    except (StopAsyncIteration, trio.TooSlowError, trio.BrokenStreamError):
+                        await msg.process_error(exc)
+                    except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError):
                         await self._reconnect(from_reader=True)
                         break
-                    except trio.ClosedResourceError:
-                        return  # exiting
+#                    except trio.ClosedResourceError:
+#                        return  # exiting
                     else:
                         msg = self.requests.popleft()
-                        msg.process_reply(res, data, self)
+                        await msg.process_reply(res, data, self)
                         if not msg.done():
                             self.requests.appendleft(msg)
 
@@ -84,13 +86,13 @@ class Server:
             if not from_reader:
                 self._read_scope.cancel()
                 self._read_scope = None
-            await self.stream.aclose()
+            self.stream.close()
             backoff = 0.5
             while True:
                 try:
-                    self.stream = await trio.open_tcp_stream(self.host, self.port)
+                    self.stream = await anyio.connect_tcp(self.host, self.port)
                 except OSError:
-                    await trio.sleep(backoff)
+                    await anyio.sleep(backoff)
                     if backoff < 10:
                         backoff *= 1.5
                 else:
@@ -102,9 +104,13 @@ class Server:
                             self.requests.append(msg)
                             await msg.write(self._msg_proto)
                     self.service.push_event(ServerConnected(self))
-                    self._write_scope = await self.service.nursery.start(self._writer)
+                    v_w = ValueEvent()
+                    await self.service.nursery.spawn(self._writer, v_w)
+                    self._write_scope = await v_w.get()
                     if not from_reader:
-                        self._read_scope = await self.service.nursery.start(self._reader)
+                        v_r = ValueEvent()
+                        await self.service.nursery.spawn(self._reader, v_r)
+                        self._read_scope = await v_r.get()
                     return
 
     async def start(self):
@@ -117,15 +123,19 @@ class Server:
         async with self._connect_lock:
             if self.stream is not None:
                 raise RuntimeError("already open")
-            self.stream = await trio.open_tcp_stream(self.host, self.port)
+            self.stream = await anyio.connect_tcp(self.host, self.port)
             self._msg_proto = MessageProtocol(self.stream, is_server=False)
             self.service.push_event(ServerConnected(self))
-            self._write_scope = await self.service.nursery.start(self._writer)
-            self._read_scope = await self.service.nursery.start(self._reader)
+            v_w = ValueEvent()
+            v_r = ValueEvent()
+            await self.service.nursery.spawn(self._writer, v_w)
+            await self.service.nursery.spawn(self._reader, v_r)
+            self._write_scope = await v_w.get()
+            self._read_scope = await v_r.get()
         try:
             await self.chat(NOPMsg(), fail=True)
         except BaseException:
-            await self.aclose()
+            self.close()
             raise
 
     async def setup_struct(self, dev):
@@ -140,7 +150,7 @@ class Server:
                     res = await msg.get_reply()
                     return res
                 except ServerBusy:
-                    await trio.sleep(backoff)
+                    await anyio.sleep(backoff)
                     if backoff < 2:
                         backoff *= 1.5
                     msg._resubmit()
@@ -152,25 +162,25 @@ class Server:
             msg.cancel()
             raise
 
-    async def _writer(self, task_status=trio.TASK_STATUS_IGNORED):
-        with trio.open_cancel_scope() as scope:
-            task_status.started(scope)
+    async def _writer(self, val):
+        async with anyio.open_cancel_scope() as scope:
+            await val.set(scope)
             while True:
                 if self._wmsg is None:
                     try:
-                        with trio.fail_after(10):
+                        async with anyio.fail_after(10):
                             self._wmsg = await self._wqueue.get()
-                    except trio.TooSlowError:
+                    except TimeoutError:
                         self._wmsg = NOPMsg()
 
                 self.requests.append(self._wmsg)
                 try:
                     await self._wmsg.write(self._msg_proto)
-                except trio.ClosedResourceError:
-                    # will get restarted by .reconnect()
-                    return
-                except trio.BrokenStreamError:
-                    await self.stream.aclose()
+#                except trio.ClosedResourceError:
+#                    # will get restarted by .reconnect()
+#                    return
+                except IncompleteRead:
+                    self.stream.close()
                     return  # wil be restarted by the reader
                 else:
                     self._wmsg = None
@@ -178,15 +188,15 @@ class Server:
     async def drop(self):
         """Stop talking and delete yourself"""
         try:
-            await self.aclose()
+            self.close()
         finally:
             self.service._del_server(self)
 
-    async def aclose(self):
+    def close(self):
         if self.stream is None:
             return
         try:
-            await self.stream.aclose()
+            self.stream.close()
         finally:
             self.stream = None
             self.service.push_event(ServerDisconnected(self))
@@ -214,14 +224,13 @@ class Server:
         try:
             while True:
                 # 5% variation, to prevent clustering
-                await trio.sleep(interval*(1+(random()-0.5)/10))
+                await anyio.sleep(interval*(1+(random()-0.5)/10))
                 async with self._scan_lock:
                     await self._scan_base(polling=polling)
         finally:
             self._scan_task = None
 
-    async def scan_now(self, polling=True, task_status=trio.TASK_STATUS_IGNORED):
-        task_status.started()
+    async def scan_now(self, polling=True):
         if self._scan_lock.locked():
             # scan in progress: just wait for it to finish
             async with self._scan_lock:

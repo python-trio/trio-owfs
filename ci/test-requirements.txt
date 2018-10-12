@@ -1,5 +1,6 @@
 attrs >= 17.4
 trio
+anyio
 pytest
 pytest-cov
 pytest-trio

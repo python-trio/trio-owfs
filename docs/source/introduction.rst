@@ -6,6 +6,10 @@ Introduction
 
 .. [#] Setting up an `owserver <http://owfs.org/uploads/owserver.html>`_ instance not included.
 
+Zeroth, decide on an asyncio library. Despite its name, ``trio_owfs`` works
+with ``trio``, Python's standard ``asyncio``, or ``curio``. This author
+prefers ``trio``.
+
 First, create an OWFS instance::
 
     import trio
@@ -37,7 +41,7 @@ Connect to one or more owserver instances::
 At this point, the server is connected and its bus has been enumerated.
 The connection to the server is kept alive and will automatically be
 re-established until you leave the ``with OWFS()`` block, or call
-``await s.aclose()``.
+``s.close()``.
 
 Your event monitor receives a :class:`trio_owfs.event.DeviceLocated` event
 for each 1wire slave; in a more complicated program, it should match them with

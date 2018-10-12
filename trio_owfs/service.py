@@ -1,6 +1,6 @@
 # base implementation
 
-import trio
+import anyio
 from functools import partial
 from async_generator import asynccontextmanager
 from async_generator import async_generator, yield_
@@ -11,6 +11,7 @@ from .server import Server
 from .device import Device
 from .event import ServerRegistered, ServerDeregistered
 from .event import DeviceAdded, DeviceDeleted
+from .util import ValueEvent
 
 import logging
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class Service:
         self._servers = set()  # typ.MutableSet[Server]  # Server
         self._devices = dict()  # ID => Device
         self._tasks = set()  # typ.MutableSet[]  # actually their cancel scopes
-        self._event_queue = None  # typ.Optional[trio.Queue]
+        self._event_queue = None  # typ.Optional[anyio.Queue]
         self.scan = scan
         self._load_structs = load_structs
 
@@ -93,7 +94,7 @@ class Service:
 
     def get_device(self, id):
         """
-        Return the :class:`trio_owfs.device.Device` instance for the device
+        Return the :class:`anyio_owfs.device.Device` instance for the device
         with this ID. Create it if it doesn't exist (this will trigger a .
         """
         try:
@@ -104,9 +105,9 @@ class Service:
             self.push_event(DeviceAdded(dev))
             return dev
 
-    async def _add_task(self, proc, *args, task_status=trio.TASK_STATUS_IGNORED):
-        with trio.open_cancel_scope() as scope:
-            task_status.started(scope)
+    async def _add_task(self, val, proc, *args):
+        async with anyio.open_cancel_scope() as scope:
+            await val.set(scope)
             try:
                 await proc(*args)
             finally:
@@ -115,23 +116,24 @@ class Service:
                 except KeyError:
                     pass
 
-    async def scan_now(self, polling=True, task_status=trio.TASK_STATUS_IGNORED):
+    async def scan_now(self, polling=True):
         """
         Task to scan the whole system.
         
         :param polling: if False, do not add polling tasks
         """
-        task_status.started()
-        async with trio.open_nursery() as n:
+        async with anyio.create_task_group() as n:
             for s in list(self._servers):
-                await n.start(partial(s.scan_now, polling=polling))
+                await n.spawn(partial(s.scan_now, polling=polling))
 
     async def add_task(self, proc, *args):
         """
         Add a background task. It is auto-cancelled when the service ends.
         Alternately, this call returns its cancel scope.
         """
-        scope = await self.nursery.start(self._add_task, proc, *args)
+        val = ValueEvent()
+        await self.nursery.spawn(self._add_task, val, proc, *args)
+        scope = await val.get()
         self._tasks.add(scope)
         return scope
 
@@ -157,7 +159,7 @@ class Service:
             await s.drop()
         if self._event_queue is not None:
             while not self._event_queue.empty():
-                await trio.sleep(0)
+                await anyio.sleep(0)
         for t in list(self._tasks):
             t.cancel()
 
@@ -168,12 +170,12 @@ class Service:
         class EventWrapper:
             def __enter__(slf):
                 assert self._event_queue is None
-                self._event_queue = trio.Queue(1000)  # bus events
+                self._event_queue = anyio.create_queue(1000)  # bus events
                 return slf
 
             def __exit__(slf, *tb):
                 if tb[1] is None:
-                    assert self._event_queue.is_empty()
+                    assert self._event_queue.empty()
                 self._event_queue.put_nowait(None)
                 self._event_queue = None
 
@@ -192,7 +194,7 @@ class Service:
 @asynccontextmanager
 @async_generator
 async def OWFS(**kwargs):
-    async with trio.open_nursery() as n:
+    async with anyio.create_task_group() as n:
         s = Service(n, **kwargs)
         async with s:
             await yield_(s)

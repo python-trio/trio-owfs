@@ -3,14 +3,7 @@
 import attr
 import outcome
 
-import trio
-
-
-class CancelledError(RuntimeError):
-    """\
-        A queued request has been cancelled.
-        """
-    pass
+import anyio
 
 
 @attr.s
@@ -23,39 +16,29 @@ class ValueEvent:
 
     """
 
-    _lot = attr.ib(default=attr.Factory(trio.hazmat.ParkingLot), init=False)
-    _value = attr.ib(default=None, init=False)
+    event = attr.ib(factory=anyio.create_event)
+    value = attr.ib(default=None, init=False)
+
+    async def set(self, value):
+        """Set the internal flag value to True, and wake any waiting tasks.
+
+        """
+        self.value = outcome.Value(value)
+        await self.event.set()
 
     def is_set(self):
-        """Return the current value of the internal flag.
+        return self.value is not None
 
-        """
-        return self._value is not None
-
-    @trio.hazmat.enable_ki_protection
-    def set(self, value):
+    async def set_error(self, exc):
         """Set the internal flag value to True, and wake any waiting tasks.
 
         """
-        self._value = outcome.Value(value)
-        self._lot.unpark_all()
-
-    @trio.hazmat.enable_ki_protection
-    def set_error(self, exc):
-        """Set the internal flag value to True, and wake any waiting tasks.
-
-        """
-        self._value = outcome.Error(exc)
-        self._lot.unpark_all()
+        self.value = outcome.Error(exc)
+        await self.event.set()
 
     def cancel(self):
-        self.set_error(CancelledError)
-
-    def clear(self):
-        """Set the internal flag value to False.
-
-        """
-        self._value = None
+        import pdb;pdb.set_trace()
+        self.set_error(anyio.CancelledError)
 
     async def get(self):
         """Block until the internal flag value becomes True.
@@ -64,19 +47,6 @@ class ValueEvent:
         otherwise returns immediately.
 
         """
-        if self._value is not None:
-            await trio.hazmat.checkpoint()
-        else:
-            await self._lot.park()
-        return self._value.unwrap()
+        await self.event.wait()
+        return self.value.unwrap()
 
-    def statistics(self):
-        """Return an object containing debugging information.
-
-        Currently the following fields are defined:
-
-        * ``tasks_waiting``: The number of tasks blocked on this event's
-          :meth:`get` method.
-
-        """
-        return self._lot.statistics()

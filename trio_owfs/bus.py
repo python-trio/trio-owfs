@@ -3,7 +3,7 @@ Buses.
 """
 
 from random import random
-import trio
+import anyio
 
 from .device import NotADevice, split_id, NoLocationKnown
 from .event import BusAdded, BusDeleted, DeviceAlarm
@@ -131,13 +131,12 @@ class Bus:
             if x not in self._tasks:
                 self._tasks[x] = await self.service.add_task(self._poll, x)
 
-    async def _poll(self, name, task_status=trio.TASK_STATUS_IGNORED):
+    async def _poll(self, name):
         """Task to run a specific poll in the background"""
-        task_status.started()
         while True:
             i = self._intervals[name] * (1+(random()-0.5)/20)
             logger.info("Delay %s for %f" % (name,i))
-            await trio.sleep(i)
+            await anyio.sleep(i)
             await self.poll(name)
 
     def add_device(self, dev):
@@ -188,7 +187,7 @@ class Bus:
     async def _poll_simul(self, name, delay):
         """Write to a single 'simultaneous' entry"""
         await self.attr_set("simultaneous", name, value=1)
-        await trio.sleep(delay)
+        await anyio.sleep(delay)
         for dev in self.devices:
             try:
                 p = getattr(dev, "poll_"+name)

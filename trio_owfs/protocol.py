@@ -172,7 +172,7 @@ class Message:
 
         # TODO
         if self.event is not None and not self.event.is_set():
-            self.event.set_error(Retry())
+            await self.event.set_error(Retry())
         self.event = ValueEvent()
 
         await protocol.write(self.typ, flags, self.rlen, self.data)
@@ -180,7 +180,7 @@ class Message:
     def _resubmit(self):
         self.event = ValueEvent()
 
-    def process_reply(self, res, data, server):
+    async def process_reply(self, res, data, server):
         logger.debug("PROCESS %s %s %s", self, res, data)
         if res < 0:
             err = _errors.get(-res, GenericOWFSReplyError)
@@ -188,16 +188,16 @@ class Message:
                 error = err(res, self, server)
             else:
                 error = err(self, server)
-            self.event.set_error(error)
+            await self.event.set_error(error)
             return
         elif res > 0:
             assert len(data) == res, (data, res)
         data = self._process(data)
         if data is not None:
-            self.event.set(data)
+            await self.event.set(data)
 
-    def process_error(self, exc):
-        self.event.set_error(exc)
+    async def process_error(self, exc):
+        await self.event.set_error(exc)
 
     def _process(self, data):
         return data
