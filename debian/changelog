@@ -1,0 +1,5 @@
+trio-owfs (0.4.2-1) smurf; urgency=low
+
+  * source package automatically created by stdeb 0.8.5
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 14 Oct 2018 08:58:52 +0200

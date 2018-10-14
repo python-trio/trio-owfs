@@ -1,0 +1,30 @@
+Source: trio-owfs
+Maintainer: Matthias Urlichs <matthias@urlichs.de>
+Section: python
+Priority: optional
+Build-Depends: dh-python, python3-setuptools, python3-all, debhelper (>= 9)
+Standards-Version: 3.9.6
+Homepage: https://github.com/python-trio/trio-owfs
+
+Package: python3-trio-owfs
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}
+Description: Async access to 1wire (asyncio,trio,curio)
+ This library allows you to access 1wire buses with Python, using any
+ async library (trio, asyncio, curio).
+ .
+ This code does *not* try to talk to any 1wire interface by itself; it
+ uses TCP port 4304 (by default) to access one or more ``owserver``\ s.
+ .
+ Bus enumeration (when starting up, plus periodically in the background
+ if desired) is automatic and can be turned off.
+ .
+ This code supports background polling, alerts, and simultaneous
+ conversions. Bus couplers (DS2509) are handled transparently. Accessors to
+ device attributes are created from device descriptors, read from
+ ``owserver`` and augmented by device-specific classes when necessary.
+ .
+ The name of this library is (a) historic, (b) its main author strongly
+ prefers Trio.
+ .
+
