@@ -19,23 +19,26 @@
    :alt: Test coverage
 
 
-1wire for Trio
-==============
+Async 1wire
+===========
 
-Welcome to `1wire for Trio <https://github.com/python-trio/trio-owfs>`__!
+Welcome to `Async 1wire <https://github.com/python-trio/trio-owfs>`__!
 
-This library allows you to access the 1wire bus with Python, using Trio.
+This library allows you to access 1wire buses with Python, using any
+async library (trio, asyncio, curio).
+
 This code does *not* try to talk to any 1wire interface by itself; it
-uses TCP port 4304 (by default) to talk to one or more ``owserver``\ s.
+uses TCP port 4304 (by default) to access one or more ``owserver``\ s.
 
-Bus enumeration (either when starting up or periodically in the background)
-is automatic and can be turned off if desired.
+Bus enumeration (when starting up, plus periodically in the background
+if desired) is automatic and can be turned off.
 
-This code does not yet support background polling, alerts, or simultaneous
-conversions. All of that is fairly high on the TODO list.
-
-Use `trio_asyncio <https://github.com/python-trio/trio-asyncio` if you need
-to use this library from an asyncio-based program.
+This code supports background polling, alerts, and simultaneous
+conversions. Bus couplers (DS2509) are handled transparently. Accessors to
+device attributes are created from device descriptors, read from
+``owserver`` and augmented by device-specific classes when necessary.
 
 License: Your choice of MIT or Apache License 2.0
 
+The name of this library is (a) historic, (b) its main author strongly
+prefers Trio.

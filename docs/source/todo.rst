@@ -2,13 +2,7 @@
 Future plans
 ++++++++++++
 
-* support simultaneous temperature or voltage conversion (no bus delay)
-
-* poll a device in the background
-
-* auto-poll each bus's ``alert`` subdirectory
-
-* improve auto-discovery of device attributes by reading ``/structure``
+* add lots of device-specific classes
 
 Non-plans
 +++++++++
