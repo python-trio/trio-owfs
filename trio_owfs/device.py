@@ -39,7 +39,7 @@ def split_id(id):
     return a, b, c
 
 @attr.s
-class SimpleGetter:
+class SimpleValue:
     path = attr.ib()
     typ = attr.ib()
 
@@ -56,6 +56,28 @@ class SimpleGetter:
         else:
             res = res.decode('utf-8')
         return res
+
+@attr.s
+class SimpleGetter:
+    path = attr.ib()
+    typ = attr.ib()
+
+    def __get__(slf, self, cls):
+        async def getter():
+            res = await self.dev.attr_get(*slf.path)
+            if slf.typ in {'f', 'g', 'p', 't'}:
+                res = float(res)
+            elif slf.typ in {'i', 'u'}:
+                res = int(res)
+            elif slf.typ == 'y':
+                res = bool(int(res))
+            elif slf.typ == 'b':
+                pass
+            else:
+                res = res.decode('utf-8')
+            return res
+
+        return getter
 
 @attr.s
 class SimpleSetter:
@@ -75,7 +97,7 @@ class SimpleSetter:
         return setter
 
 @attr.s
-class ArrayGetter:
+class ArrayValue:
     path = attr.ib()
     typ = attr.ib()
     num = attr.ib()
@@ -101,6 +123,33 @@ class ArrayGetter:
                     res = res.decode('utf-8')
                 return res
         return IdxObj()
+
+@attr.s
+class ArrayGetter:
+    path = attr.ib()
+    typ = attr.ib()
+    num = attr.ib()
+
+    def __get__(slf, self, cls):
+        async def getter(idx):
+            if slf.num:
+                idx = str(idx)
+            else:
+                idx = chr(ord('A')+idx)
+            p = slf.path[:-1] + (slf.path[-1]+'.'+idx,)
+            res = await self.dev.attr_get(*p)
+            if slf.typ in {'f', 'g', 'p', 't'}:
+                res = float(res)
+            elif slf.typ in {'i', 'u'}:
+                res = int(res)
+            elif slf.typ == 'y':
+                res = bool(int(res))
+            elif slf.typ == 'b':
+                pass
+            else:
+                res = res.decode('utf-8')
+            return res
+        return getter
 
 @attr.s
 class ArraySetter:
@@ -180,14 +229,16 @@ async def setup_accessors(server, cls, typ, *subdir):
 
                 if num is None:
                     if v[3] in {'ro', 'rw'}:
-                        setattr(cls, d, SimpleGetter(dd, v[0]))
+                        setattr(cls, d, SimpleValue(dd, v[0]))
+                        setattr(cls, 'get_' + d, SimpleGetter(dd, v[0]))
                     if v[3] in {'wo', 'rw'}:
                         setattr(cls, 'set_' + d, SimpleSetter(dd, v[0]))
                 else:
                     d = d[:-2]
                     dd = subdir + (d,)
                     if v[3] in {'ro', 'rw'}:
-                        setattr(cls, d, ArrayGetter(dd, v[0], num))
+                        setattr(cls, d, ArrayValue(dd, v[0], num))
+                        setattr(cls, 'get_' + d, ArrayGetter(dd, v[0], num))
                     if v[3] in {'wo', 'rw'}:
                         setattr(cls, 'set_' + d, ArraySetter(dd, v[0], num))
 
@@ -343,8 +394,9 @@ class SwitchDevice(Device):
 @register
 class TemperatureDevice(Device):
     family = 0x10
-    interval_temperature = 60
-    interval_alarm = 60
+
+    interval_temperature = None
+    interval_alarm = None
     alarm_temperature = None
 
     async def poll_alarm(self):
@@ -364,4 +416,8 @@ class TemperatureDevice(Device):
     async def poll_temperature(self):
         t = await self.latesttemp
         self.service.push_event(DeviceValue(self, "temperature", t))
+
+    @property
+    def temperature(self):
+        return self.latesttemp
 

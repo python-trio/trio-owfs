@@ -303,13 +303,13 @@ async def test_more_structs(mock_clock):
         assert await dev.temperature == 12.5
         await dev.set_temphigh(98.25)
         assert await dev.temphigh == 98.25
-        assert await dev.foo.bar == 42
+        assert await dev.foo.get_bar() == 42
         assert await dev.foo.baz.qux == 99.875
         assert await dev.foo.plugh[0] == 1
         assert await dev.foo.plugh[1] == 2
         assert await dev.foo.plugh[2] == 3
         assert await dev.foo.plover[0] == 7
-        assert await dev.foo.plover[1] == 8
+        assert await dev.foo.get_plover(1) == 8
         assert await dev.foo.plover[2] == 9
         await dev.foo.set_bar(123)
         await dev.foo.baz.set_qux(234)
@@ -322,7 +322,7 @@ async def test_more_structs(mock_clock):
         assert await dev.foo.plugh[2] == 3
         assert await dev.foo.plover[0] == 7
         assert await dev.foo.plover[1] == 111
-        assert await dev.foo.plover[2] == 9
+        assert await dev.foo.get_plover(2) == 9
 
 async def test_coupler_server():
     msgs = [
