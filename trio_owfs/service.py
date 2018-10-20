@@ -39,16 +39,17 @@ class Service:
 
         """
 
-    def __init__(self, nursery, scan: Optional[int] = 0, load_structs: bool = True):
+    def __init__(self, nursery, scan: Optional[int] = 0, load_structs: bool = True, polling: bool = True):
         self.nursery = nursery
         self._servers = set()  # typ.MutableSet[Server]  # Server
         self._devices = dict()  # ID => Device
         self._tasks = set()  # typ.MutableSet[]  # actually their cancel scopes
         self._event_queue = None  # typ.Optional[anyio.Queue]
         self.scan = scan
+        self.polling = polling
         self._load_structs = load_structs
 
-    async def add_server(self, host: str, port: int = 4304, polling: bool = True,
+    async def add_server(self, host: str, port: int = 4304, polling: Optional[bool] = None,
             scan = -1):
         """Add this server to the list.
         
@@ -57,6 +58,8 @@ class Service:
         """
         if scan == -1:
             scan = self.scan
+        if polling is None:
+            polling = self.polling
 
         s = Server(self, host, port)
         self.push_event(ServerRegistered(s))
