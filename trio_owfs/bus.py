@@ -40,7 +40,10 @@ class Bus:
     @property
     def devices(self):
         """Iterate over the devices on this bus"""
-        return list(self._devices.values())
+        try:
+            return list(self._devices.values())
+        except AttributeError:
+            return ()
 
     @property
     def buses(self):
@@ -68,6 +71,8 @@ class Bus:
     def get_bus(self, *path):
         try:
             return self._buses[path]
+        except TypeError:
+            return None # bus is gone
         except KeyError:
             bus = Bus(self.server, *(self.path + path))
             self._buses[path] = bus
@@ -96,7 +101,8 @@ class Bus:
             for b in dev.buses():
                 buses.add(b)
                 bus = self.get_bus(*b)
-                buses.update(await bus._scan_one(polling=polling))
+                if bus is not None:
+                    buses.update(await bus._scan_one(polling=polling))
 
         for d in old_devs:
             dev = self._devices[d]
@@ -181,8 +187,8 @@ class Bus:
         for dev in await self.dir("alarm"):
             dev = self.service.get_device(dev)
             self.add_device(dev)
-            await dev.poll_alarm()
-            self.service.push_event(DeviceAlarm(dev))
+            reasons = await dev.poll_alarm()
+            self.service.push_event(DeviceAlarm(dev, reasons))
 
     async def _poll_simul(self, name, delay):
         """Write to a single 'simultaneous' entry"""

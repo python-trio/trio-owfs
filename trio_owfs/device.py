@@ -385,6 +385,9 @@ class SwitchDevice(Device):
     family = 0x1F
 
     def buses(self):
+        """Return a list of the connected buses.
+        'main' should be processed first.
+        """
         b = []
         b.append((self.id, "main"))
         b.append((self.id, "aux"))
@@ -400,13 +403,21 @@ class TemperatureDevice(Device):
     alarm_temperature = None
 
     async def poll_alarm(self):
+        """Turn off alarm condition by adapting the temperature bounds
+        """
         t = await self.latesttemp
         self.alarm_temperature = t
+        reasons = {'temp':t}
 
-        if t > (await self.temphigh):
+        t_h = await self.temphigh
+        if t > t_h:
             await self.set_temphigh(int(t + 2))
-        if t < (await self.templow):
+            reasons['high'] = t_h
+        t_l = await self.templow
+        if t < t_l:
             await self.set_templow(int(t - 1))
+            reasons['low'] = t_l
+        return 
 
     def polling_items(self):
         yield from super().polling_items()
