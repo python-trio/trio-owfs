@@ -1,3 +1,9 @@
+trio-owfs (0.5.0-1) smurf; urgency=medium
+
+  * Merge
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 24 Oct 2018 14:30:18 +0200
+
 trio-owfs (0.4.2-1) smurf; urgency=low
 
   * source package automatically created by stdeb 0.8.5

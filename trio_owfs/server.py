@@ -135,7 +135,7 @@ class Server:
         try:
             await self.chat(NOPMsg(), fail=True)
         except BaseException:
-            self.close()
+            await self.aclose()
             raise
 
     async def setup_struct(self, dev):
@@ -180,7 +180,7 @@ class Server:
 #                    # will get restarted by .reconnect()
 #                    return
                 except IncompleteRead:
-                    self.stream.close()
+                    await self.stream.close()
                     return  # wil be restarted by the reader
                 else:
                     self._wmsg = None
@@ -188,25 +188,26 @@ class Server:
     async def drop(self):
         """Stop talking and delete yourself"""
         try:
-            self.close()
+            await self.aclose()
         finally:
             self.service._del_server(self)
 
-    def close(self):
+    async def aclose(self):
         if self.stream is None:
             return
+
+        if self._write_scope is not None:
+            await self._write_scope.cancel()
+            self._write_scope = None
+        if self._read_scope is not None:
+            await self._read_scope.cancel()
+            self._read_scope = None
+
         try:
-            self.stream.close()
+            await self.stream.close()
         finally:
             self.stream = None
             self.service.push_event(ServerDisconnected(self))
-
-        if self._write_scope is not None:
-            self._write_scope.cancel()
-            self._write_scope = None
-        if self._read_scope is not None:
-            self._read_scope.cancel()
-            self._read_scope = None
 
         for b in list(self._buses.values()):
             b.delocate()

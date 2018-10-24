@@ -41,7 +41,7 @@ Connect to one or more owserver instances::
 At this point, the server is connected and its bus has been enumerated.
 The connection to the server is kept alive and will automatically be
 re-established until you leave the ``with OWFS()`` block, or call
-``s.close()``.
+``await s.aclose()``.
 
 Your event monitor receives a :class:`trio_owfs.event.DeviceLocated` event
 for each 1wire slave; in a more complicated program, it should match them with
