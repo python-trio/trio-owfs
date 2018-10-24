@@ -152,6 +152,10 @@ class Service:
         self._devices.remove(d)
         self.push_event(DeviceDeleted(d))
 
+    @property
+    def devices(self):
+        return self._devices.values()
+
     # context
 
     async def __aenter__(self):
