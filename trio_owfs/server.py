@@ -84,7 +84,7 @@ class Server:
             if not from_reader:
                 await self._read_scope.cancel()
                 self._read_scope = None
-            self.stream.close()
+            await self.stream.close()
             backoff = 0.5
             while True:
                 try:
