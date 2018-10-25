@@ -31,7 +31,7 @@ class Server:
         self.requests = deque()
         self._wlock = anyio.create_lock()
         self._connect_lock = anyio.create_lock()
-        self._wqueue = anyio.create_queue(10)
+        self._wqueue = anyio.create_queue(100)
         self._wmsg = None
         self._scan_task = None
         self._buses = dict()  # path => bus
@@ -99,10 +99,7 @@ class Server:
                     self._msg_proto = MessageProtocol(self.stream, is_server=False)
                     # re-send messages, but skip those that have been cancelled
                     ml, self.requests = list(self.requests), deque()
-                    for msg in ml:
-                        if not msg.cancelled:
-                            self.requests.append(msg)
-                            await msg.write(self._msg_proto)
+                    self._wqueue = anyio.create_queue(100)
                     self.service.push_event(ServerConnected(self))
                     v_w = ValueEvent()
                     await self.service.nursery.spawn(self._writer, v_w)
@@ -111,6 +108,9 @@ class Server:
                         v_r = ValueEvent()
                         await self.service.nursery.spawn(self._reader, v_r)
                         self._read_scope = await v_r.get()
+                    for msg in ml:
+                        if not msg.cancelled:
+                            self._wqueue.put_nowait(msg)
                     return
 
     async def start(self):
