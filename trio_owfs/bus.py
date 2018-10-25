@@ -120,10 +120,10 @@ class Bus:
         intervals = dict()
         for dev in self.devices:
             for k in dev.polling_items():
-                items.add(k)
                 i = dev.polling_interval(k)
                 if i is None:
                     continue
+                items.add(k)
                 oi = intervals.get(k, i)
                 intervals[k] = min(oi, i)
 
