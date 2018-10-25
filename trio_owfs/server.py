@@ -3,7 +3,7 @@ Access to an owserver.
 """
 
 import anyio
-from anyio.exceptions import IncompleteRead
+from anyio.exceptions import IncompleteRead,ClosedResourceError
 from collections import deque
 from random import random
 
@@ -62,7 +62,7 @@ class Server:
                 except ServerBusy as exc:
                     msg = self.requests.popleft()
                     await msg.process_error(exc)
-                except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError):
+                except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError, ClosedResourceError):
                     await self._reconnect(from_reader=True)
                     it = self._msg_proto.__aiter__()
 #                    except trio.ClosedResourceError:
