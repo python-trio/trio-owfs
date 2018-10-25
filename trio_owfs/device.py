@@ -216,9 +216,12 @@ async def setup_accessors(server, cls, typ, *subdir):
 
         else:
             v = v.decode("utf-8").split(",")
-            v[1] = int(v[1])
-            v[2] = int(v[2])
-            v[4] = int(v[4])
+            try:
+                v[1] = int(v[1])
+                v[2] = int(v[2])
+                v[4] = int(v[4])
+            except ValueError:
+                raise ValueError("broken setup vector",(typ,dd),v)
             if v[1] == 0:
                 if d.endswith('.0'):
                     num = True
