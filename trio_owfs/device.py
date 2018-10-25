@@ -232,7 +232,9 @@ async def setup_accessors(server, cls, typ, *subdir):
 
                 if num is None:
                     if v[3] in {'ro', 'rw'}:
-                        if not hasattr(cls, d):
+                        if hasattr(cls, d):
+                            logger.warn("%s: not overwriting %s" % (cls, d))
+                        else:
                             setattr(cls, d, SimpleValue(dd, v[0]))
                         setattr(cls, 'get_' + d, SimpleGetter(dd, v[0]))
                     if v[3] in {'wo', 'rw'}:
@@ -241,7 +243,9 @@ async def setup_accessors(server, cls, typ, *subdir):
                     d = d[:-2]
                     dd = subdir + (d,)
                     if v[3] in {'ro', 'rw'}:
-                        if not hasattr(cls, d):
+                        if hasattr(cls, d):
+                            logger.warn("%s: not overwriting %s" % (cls, d))
+                        else:
                             setattr(cls, d, ArrayValue(dd, v[0], num))
                         setattr(cls, 'get_' + d, ArrayGetter(dd, v[0], num))
                     if v[3] in {'wo', 'rw'}:
