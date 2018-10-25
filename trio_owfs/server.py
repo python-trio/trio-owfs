@@ -79,10 +79,10 @@ class Server:
                 return
         async with self._connect_lock:
             self.service.push_event(ServerDisconnected(self))
-            self._write_scope.cancel()
+            await self._write_scope.cancel()
             self._write_scope = None
             if not from_reader:
-                self._read_scope.cancel()
+                await self._read_scope.cancel()
                 self._read_scope = None
             self.stream.close()
             backoff = 0.5
