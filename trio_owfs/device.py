@@ -4,6 +4,7 @@ Devices.
 
 import attr
 from functools import partial
+from typing import List, Optional
 
 from .event import DeviceLocated, DeviceNotFound, DeviceValue
 from .error import IsDirError
@@ -342,13 +343,13 @@ class Device(SubDir):
         self.bus = None
         self.service.push_event(DeviceNotFound(self))
 
-    async def attr_get(self, *attr):
+    async def attr_get(self, *attr: List[str]):
         """Read this attribute"""
         if self.bus is None:
             raise NoLocationKnown(self)
         return await self.bus.attr_get(*((self.id,) + attr))
 
-    async def attr_set(self, *attr, value):
+    async def attr_set(self, *attr: List[str], value):
         """Write this attribute"""
         if self.bus is None:
             raise NoLocationKnown(self)
@@ -371,7 +372,7 @@ class Device(SubDir):
         if False:
             yield None
 
-    def polling_interval(self, typ):
+    def polling_interval(self, typ: str):
         """Return the interval WRT how often to poll for this type.
 
         The default implementation looks up the "interval_<typ>" attribute
@@ -379,6 +380,11 @@ class Device(SubDir):
         """
         return getattr(self, "interval_"+typ, None)
     
+    async def set_polling_interval(self, typ: str, value: Optional[float]):
+        setattr(self, "interval_"+typ, value)
+        if self._bus is not None:
+            await self._bus.update_poll()
+
     async def poll_alarm(self):
         """Tells the device not to trigger an alarm any more.
 
