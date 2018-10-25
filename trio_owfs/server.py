@@ -32,7 +32,6 @@ class Server:
         self._wlock = anyio.create_lock()
         self._connect_lock = anyio.create_lock()
         self._wqueue = anyio.create_queue(100)
-        self._wmsg = None
         self._scan_task = None
         self._buses = dict()  # path => bus
         self._scan_lock = anyio.create_lock()
@@ -55,25 +54,24 @@ class Server:
     async def _reader(self, val):
         async with anyio.open_cancel_scope() as scope:
             await val.set(scope)
+            it = self._msg_proto.__aiter__()
             while True:
-                it = self._msg_proto.__aiter__()
-                while True:
-                    try:
-                        async with anyio.fail_after(15):
-                            res, data = await it.__anext__()
-                    except ServerBusy as exc:
-                        msg = self.requests.popleft()
-                        await msg.process_error(exc)
-                    except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError):
-                        await self._reconnect(from_reader=True)
-                        break
+                try:
+                    async with anyio.fail_after(15):
+                        res, data = await it.__anext__()
+                except ServerBusy as exc:
+                    msg = self.requests.popleft()
+                    await msg.process_error(exc)
+                except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError):
+                    await self._reconnect(from_reader=True)
+                    it = self._msg_proto.__aiter__()
 #                    except trio.ClosedResourceError:
 #                        return  # exiting
-                    else:
-                        msg = self.requests.popleft()
-                        await msg.process_reply(res, data, self)
-                        if not msg.done():
-                            self.requests.appendleft(msg)
+                else:
+                    msg = self.requests.popleft()
+                    await msg.process_reply(res, data, self)
+                    if not msg.done():
+                        self.requests.appendleft(msg)
 
     async def _reconnect(self, from_reader=False):
         if self._connect_lock.locked():
@@ -166,24 +164,21 @@ class Server:
         async with anyio.open_cancel_scope() as scope:
             await val.set(scope)
             while True:
-                if self._wmsg is None:
-                    try:
-                        async with anyio.fail_after(10):
-                            self._wmsg = await self._wqueue.get()
-                    except TimeoutError:
-                        self._wmsg = NOPMsg()
-
-                self.requests.append(self._wmsg)
                 try:
-                    await self._wmsg.write(self._msg_proto)
+                    async with anyio.fail_after(10):
+                        msg = await self._wqueue.get()
+                except TimeoutError:
+                    msg = NOPMsg()
+
+                self.requests.append(msg)
+                try:
+                    await msg.write(self._msg_proto)
 #                except trio.ClosedResourceError:
 #                    # will get restarted by .reconnect()
 #                    return
                 except IncompleteRead:
                     await self.stream.close()
                     return  # wil be restarted by the reader
-                else:
-                    self._wmsg = None
 
     async def drop(self):
         """Stop talking and delete yourself"""
