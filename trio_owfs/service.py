@@ -168,7 +168,7 @@ class Service:
             while not self._event_queue.empty():
                 await anyio.sleep(0)
         for t in list(self._tasks):
-            t.cancel()
+            await t.cancel()
 
     # listen to events
 
