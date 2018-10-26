@@ -4,6 +4,7 @@ Devices.
 
 import attr
 from functools import partial
+from typing import List, Optional
 
 from .event import DeviceLocated, DeviceNotFound, DeviceValue
 from .error import IsDirError
@@ -216,9 +217,12 @@ async def setup_accessors(server, cls, typ, *subdir):
 
         else:
             v = v.decode("utf-8").split(",")
-            v[1] = int(v[1])
-            v[2] = int(v[2])
-            v[4] = int(v[4])
+            try:
+                v[1] = int(v[1])
+                v[2] = int(v[2])
+                v[4] = int(v[4])
+            except ValueError:
+                raise ValueError("broken setup vector",(typ,dd),v)
             if v[1] == 0:
                 if d.endswith('.0'):
                     num = True
@@ -229,7 +233,10 @@ async def setup_accessors(server, cls, typ, *subdir):
 
                 if num is None:
                     if v[3] in {'ro', 'rw'}:
-                        setattr(cls, d, SimpleValue(dd, v[0]))
+                        if hasattr(cls, d):
+                            logger.warn("%s: not overwriting %s" % (cls, d))
+                        else:
+                            setattr(cls, d, SimpleValue(dd, v[0]))
                         setattr(cls, 'get_' + d, SimpleGetter(dd, v[0]))
                     if v[3] in {'wo', 'rw'}:
                         setattr(cls, 'set_' + d, SimpleSetter(dd, v[0]))
@@ -237,7 +244,10 @@ async def setup_accessors(server, cls, typ, *subdir):
                     d = d[:-2]
                     dd = subdir + (d,)
                     if v[3] in {'ro', 'rw'}:
-                        setattr(cls, d, ArrayValue(dd, v[0], num))
+                        if hasattr(cls, d):
+                            logger.warn("%s: not overwriting %s" % (cls, d))
+                        else:
+                            setattr(cls, d, ArrayValue(dd, v[0], num))
                         setattr(cls, 'get_' + d, ArrayGetter(dd, v[0], num))
                     if v[3] in {'wo', 'rw'}:
                         setattr(cls, 'set_' + d, ArraySetter(dd, v[0], num))
@@ -333,13 +343,13 @@ class Device(SubDir):
         self.bus = None
         self.service.push_event(DeviceNotFound(self))
 
-    async def attr_get(self, *attr):
+    async def attr_get(self, *attr: List[str]):
         """Read this attribute"""
         if self.bus is None:
             raise NoLocationKnown(self)
         return await self.bus.attr_get(*((self.id,) + attr))
 
-    async def attr_set(self, *attr, value):
+    async def attr_set(self, *attr: List[str], value):
         """Write this attribute"""
         if self.bus is None:
             raise NoLocationKnown(self)
@@ -362,7 +372,7 @@ class Device(SubDir):
         if False:
             yield None
 
-    def polling_interval(self, typ):
+    def polling_interval(self, typ: str):
         """Return the interval WRT how often to poll for this type.
 
         The default implementation looks up the "interval_<typ>" attribute
@@ -370,6 +380,11 @@ class Device(SubDir):
         """
         return getattr(self, "interval_"+typ, None)
     
+    async def set_polling_interval(self, typ: str, value: Optional[float]):
+        setattr(self, "interval_"+typ, value)
+        if self._bus is not None:
+            await self._bus.update_poll()
+
     async def poll_alarm(self):
         """Tells the device not to trigger an alarm any more.
 
