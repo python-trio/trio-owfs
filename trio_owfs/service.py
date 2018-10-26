@@ -5,7 +5,7 @@ from functools import partial
 from async_generator import asynccontextmanager
 from async_generator import async_generator, yield_
 
-from typing import Optional
+from typing import Optional,Union
 
 from .server import Server
 from .device import Device
@@ -33,31 +33,41 @@ class Service:
                 s = await ow.add_server("localhost",4304")
 
         :param scan: time between directory scanning.
+            None: do not scan repeatedly
 
-            0: only after connecting (default)
-            None: do not scan at all
+        :param initial_scan: time to first scan
+            False: no initial scal
+            True: scan immediately, block before returning
 
+        :param polling: flag whether to poll devices.
+            Default: True.
+
+        :param load_structs: Flag whether to generate accessors from OWFS data.
+            Default: True
         """
 
-    def __init__(self, nursery, scan: Optional[int] = 0, load_structs: bool = True, polling: bool = True):
+    def __init__(self, nursery, scan: Union[float,None] = None, initial_scan: Union[float,bool] = True, load_structs: bool = True, polling: bool = True):
         self.nursery = nursery
         self._servers = set()  # typ.MutableSet[Server]  # Server
         self._devices = dict()  # ID => Device
         self._tasks = set()  # typ.MutableSet[]  # actually their cancel scopes
         self._event_queue = None  # typ.Optional[anyio.Queue]
         self.scan = scan
+        self.initial_scan = initial_scan
         self.polling = polling
         self._load_structs = load_structs
 
     async def add_server(self, host: str, port: int = 4304, polling: Optional[bool] = None,
-            scan = -1):
+            scan: Union[float,bool,None] = None, initial_scan: Union[float,bool,None] = None):
         """Add this server to the list.
         
         :param polling: if False, don't poll.
         :param scan: Override ``self.scan``.
         """
-        if scan == -1:
+        if scan is None:
             scan = self.scan
+        if initial_scan is None:
+            initial_scan = self.initial_scan
         if polling is None:
             polling = self.polling
 
@@ -71,7 +81,7 @@ class Service:
             raise
         else:
             self._servers.add(s)
-            await s.start_scan(scan, polling=polling)
+            await s.start_scan(scan=scan, initial_scan=initial_scan, polling=polling)
         return s
 
     async def ensure_struct(self, dev, server=None, maybe=False):
