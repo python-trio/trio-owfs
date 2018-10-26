@@ -382,8 +382,8 @@ class Device(SubDir):
     
     async def set_polling_interval(self, typ: str, value: Optional[float]):
         setattr(self, "interval_"+typ, value)
-        if self._bus is not None:
-            await self._bus.update_poll()
+        if self.bus is not None:
+            await self.bus.update_poll()
 
     async def poll_alarm(self):
         """Tells the device not to trigger an alarm any more.
