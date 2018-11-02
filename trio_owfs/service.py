@@ -62,7 +62,8 @@ class Service:
         """Add this server to the list.
         
         :param polling: if False, don't poll.
-        :param scan: Override ``self.scan``.
+        :param scan: Override ``self.scan`` for this server.
+        :param initial_scan: Override ``self.initial_scan`` for this server.
         """
         if scan is None:
             scan = self.scan
