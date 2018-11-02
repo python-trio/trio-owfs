@@ -6,6 +6,7 @@ import anyio
 from anyio.exceptions import IncompleteRead,ClosedResourceError
 from collections import deque
 from random import random
+from typing import Union
 
 from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded
@@ -60,8 +61,7 @@ class Server:
                     async with anyio.fail_after(15):
                         res, data = await it.__anext__()
                 except ServerBusy as exc:
-                    msg = self.requests.popleft()
-                    await msg.process_error(exc)
+                    logger.info("Server %s busy", self.host)
                 except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError, ClosedResourceError):
                     await self._reconnect(from_reader=True)
                     it = self._msg_proto.__aiter__()
@@ -96,6 +96,7 @@ class Server:
                 else:
                     self._msg_proto = MessageProtocol(self.stream, is_server=False)
                     # re-send messages, but skip those that have been cancelled
+                    logger.warning("Server %s restarting", self.host)
                     ml, self.requests = list(self.requests), deque()
                     self._wqueue = anyio.create_queue(100)
                     self.service.push_event(ServerConnected(self))
@@ -216,13 +217,18 @@ class Server:
     async def dir(self, *path):
         return await self.chat(DirMsg(path))
 
-    async def _scan(self, interval, polling):
+    async def _scan(self, interval, initial_interval, polling):
+        if not initial_interval:
+            initial_interval = interval
+        # 5% variation, to prevent clustering
+        await anyio.sleep(initial_interval*(1+(random()-0.5)/10))
         try:
             while True:
-                # 5% variation, to prevent clustering
-                await anyio.sleep(interval*(1+(random()-0.5)/10))
                 async with self._scan_lock:
-                    await self._scan_base(polling=polling)
+                    await self.scan_now(polling=polling)
+                if not interval:
+                    return
+                await anyio.sleep(interval*(1+(random()-0.5)/10))
         finally:
             self._scan_task = None
 
@@ -260,23 +266,31 @@ class Server:
             else:
                 bus._unseen += 1
 
-    async def start_scan(self, interval, polling=True):
+    async def start_scan(self, scan: Union[float,None] = None,
+            initial_scan: Union[float,bool] = True, polling = True):
         """Scan this server.
 
-        :param interval: Flag how often to re-scan the bus.
-            None: don't scan at all, return immediately.
-            Zero: scan once, return after scan is complete.
-            >0: return after the first scan, but also start a background
-            tasks that re-scans every ``interval`` seconds
-        :type interval: :class:`int` or ``None``
+        :param scan: Flag how often to re-scan the bus.
+            None: don't scan at all
+            >0: repeat in the background
+        :param initial_scan: Flag when to initially scan the bus.
+            False: don't.
+            True: immediately, wait until complete.
+            >0: return immediately, delay initial scan that many seconds.
+        :type scan: :class:`float` or ``None``
+        :type initial_scan: :class:`float` or :class:`bool`
         :param polling: Flag whether to start tasks for periodic polling
             (alarm handling, temperature, …). Defaults to ``True``.
         """
-        if interval is None:
+        if not scan and not initial_scan:
             return
-        await self.scan_now(polling=polling)
-        if interval > 0:
-            self._scan_task = await self.service.add_task(self._scan, interval, polling)
+        if scan and scan < 1:
+            raise RuntimeError("You can't scan that often.")
+        if initial_scan is True:
+            await self.scan_now(polling=polling)
+            initial_scan = False
+        if initial_scan or scan:
+            self._scan_task = await self.service.add_task(self._scan, scan, initial_scan, polling)
 
     async def attr_get(self, *path):
         return await self.chat(AttrGetMsg(*path))
