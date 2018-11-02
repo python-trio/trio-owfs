@@ -225,7 +225,7 @@ class Server:
         try:
             while True:
                 async with self._scan_lock:
-                    await self._scan_base(polling=polling)
+                    await self.scan_now(polling=polling)
                 if not interval:
                     return
                 await anyio.sleep(interval*(1+(random()-0.5)/10))
