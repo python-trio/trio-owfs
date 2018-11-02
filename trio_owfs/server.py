@@ -61,8 +61,7 @@ class Server:
                     async with anyio.fail_after(15):
                         res, data = await it.__anext__()
                 except ServerBusy as exc:
-                    msg = self.requests.popleft()
-                    await msg.process_error(exc)
+                    logger.info("Server %s busy", self.host)
                 except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError, ClosedResourceError):
                     await self._reconnect(from_reader=True)
                     it = self._msg_proto.__aiter__()
@@ -97,6 +96,7 @@ class Server:
                 else:
                     self._msg_proto = MessageProtocol(self.stream, is_server=False)
                     # re-send messages, but skip those that have been cancelled
+                    logger.warning("Server %s restarting", self.host)
                     ml, self.requests = list(self.requests), deque()
                     self._wqueue = anyio.create_queue(100)
                     self.service.push_event(ServerConnected(self))
