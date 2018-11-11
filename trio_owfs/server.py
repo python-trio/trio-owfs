@@ -30,7 +30,6 @@ class Server:
         self.stream = None
         self._msg_proto = None
         self.requests = deque()
-        self._wlock = anyio.create_lock()
         self._connect_lock = anyio.create_lock()
         self._wqueue = anyio.create_queue(100)
         self._scan_task = None
