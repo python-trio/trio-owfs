@@ -217,18 +217,24 @@ class Server:
     async def dir(self, *path):
         return await self.chat(DirMsg(path))
 
-    async def _scan(self, interval, initial_interval, polling):
+    async def _scan(self, interval, initial_interval, polling, random=0):
         if not initial_interval:
             initial_interval = interval
         # 5% variation, to prevent clustering
-        await anyio.sleep(initial_interval*(1+(random()-0.5)/10))
+        if random:
+            initial_interval *= 1+(random()-0.5)/random
+        await anyio.sleep(initial_interval)
+
         try:
             while True:
                 async with self._scan_lock:
                     await self.scan_now(polling=polling)
                 if not interval:
                     return
-                await anyio.sleep(interval*(1+(random()-0.5)/10))
+                i = interval
+                if random:
+                    i *= 1+(random()-0.5)/random
+                await anyio.sleep(i)
         finally:
             self._scan_task = None
 
@@ -267,7 +273,8 @@ class Server:
                 bus._unseen += 1
 
     async def start_scan(self, scan: Union[float,None] = None,
-            initial_scan: Union[float,bool] = True, polling = True):
+            initial_scan: Union[float,bool] = True, polling = True,
+            random: int = 0):
         """Scan this server.
 
         :param scan: Flag how often to re-scan the bus.
@@ -290,7 +297,7 @@ class Server:
             await self.scan_now(polling=polling)
             initial_scan = False
         if initial_scan or scan:
-            self._scan_task = await self.service.add_task(self._scan, scan, initial_scan, polling)
+            self._scan_task = await self.service.add_task(self._scan, scan, initial_scan, polling, random)
 
     async def attr_get(self, *path):
         return await self.chat(AttrGetMsg(*path))

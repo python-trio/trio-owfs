@@ -46,31 +46,35 @@ class Service:
             Default: True
         """
 
-    def __init__(self, nursery, scan: Union[float,None] = None, initial_scan: Union[float,bool] = True, load_structs: bool = True, polling: bool = True):
+    def __init__(self, nursery, scan: Union[float,None] = None, initial_scan: Union[float,bool] = True, load_structs: bool = True, polling: bool = True, random: int = 0):
         self.nursery = nursery
         self._servers = set()  # typ.MutableSet[Server]  # Server
         self._devices = dict()  # ID => Device
         self._tasks = set()  # typ.MutableSet[]  # actually their cancel scopes
         self._event_queue = None  # typ.Optional[anyio.Queue]
-        self.scan = scan
-        self.initial_scan = initial_scan
-        self.polling = polling
+        self._random = random
+        self._scan = scan
+        self._initial_scan = initial_scan
+        self._polling = polling
         self._load_structs = load_structs
 
     async def add_server(self, host: str, port: int = 4304, polling: Optional[bool] = None,
-            scan: Union[float,bool,None] = None, initial_scan: Union[float,bool,None] = None):
+            scan: Union[float,bool,None] = None, initial_scan: Union[float,bool,None] = None,
+            random: Optional[int] = None):
         """Add this server to the list.
         
         :param polling: if False, don't poll.
-        :param scan: Override ``self.scan`` for this server.
-        :param initial_scan: Override ``self.initial_scan`` for this server.
+        :param scan: Override ``self._scan`` for this server.
+        :param initial_scan: Override ``self._initial_scan`` for this server.
         """
         if scan is None:
-            scan = self.scan
+            scan = self._scan
         if initial_scan is None:
-            initial_scan = self.initial_scan
+            initial_scan = self._initial_scan
         if polling is None:
-            polling = self.polling
+            polling = self._polling
+        if random is None:
+            random = self._random
 
         s = Server(self, host, port)
         await self.push_event(ServerRegistered(s))
@@ -82,7 +86,7 @@ class Service:
             raise
         else:
             self._servers.add(s)
-            await s.start_scan(scan=scan, initial_scan=initial_scan, polling=polling)
+            await s.start_scan(scan=scan, initial_scan=initial_scan, polling=polling, random=random)
         return s
 
     async def ensure_struct(self, dev, server=None, maybe=False):

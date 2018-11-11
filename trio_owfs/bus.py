@@ -27,6 +27,7 @@ class Bus:
         self._unseen = 0  # didn't find when scanning
         self._tasks = dict()  # polltype => task
         self._intervals = dict()
+        self._random = dict() # varying intervals
 
     def __repr__(self):
         return "<%s:%s %s>" % (self.__class__.__name__, self.server, '/' + '/'.join(self.path))
@@ -119,14 +120,22 @@ class Bus:
         """Start all new polling jobs, terminate old ones"""
         items = set()
         intervals = dict()
+        randoms = dict()
         for dev in self.devices:
             for k in dev.polling_items():
                 i = dev.polling_interval(k)
                 if i is None:
                     continue
                 items.add(k)
+                if isinstance(i, (tuple,list)):
+                    i,j = i
+                else:
+                    j = None
                 oi = intervals.get(k, i)
                 intervals[k] = min(oi, i)
+                if j is not None:
+                    oi = randoms.get(k, j)
+                    randoms[k] = min(oi, j)
 
         old_items = set(self._tasks.keys()) - items
         for x in old_items:
@@ -134,6 +143,7 @@ class Bus:
             j.cancel()
 
         self._intervals.update(intervals)
+        self._random.update(randoms)
         for x in items:
             if x not in self._tasks:
                 self._tasks[x] = await self.service.add_task(self._poll, x)
@@ -141,7 +151,10 @@ class Bus:
     async def _poll(self, name):
         """Task to run a specific poll in the background"""
         while True:
-            i = self._intervals[name] * (1+(random()-0.5)/20)
+            i = self._intervals[name]
+            j = self._random.get(name, 0)
+            if j:
+                i *= (1+(random()-0.5)/j)
             logger.info("Delay %s for %f" % (name,i))
             await anyio.sleep(i)
             await self.poll(name)
