@@ -7,6 +7,7 @@ import anyio
 
 from .device import NotADevice, split_id, NoLocationKnown
 from .event import BusAdded, BusDeleted, DeviceAlarm
+from .error import OWFSReplyError
 
 import logging
 logger = logging.getLogger(__name__)
@@ -173,14 +174,17 @@ class Bus:
         This typically runs via a :meth:`_poll` task, started by :meth:`update_poll`.
         """
         try:
-            p = getattr(self, 'poll_'+name)
-        except AttributeError:
-            for d in self.devices:
-                p = getattr(d, 'poll_'+name, None)
-                if p is not None:
-                    await p()
-        else:
-            await p()
+            try:
+                p = getattr(self, 'poll_'+name)
+            except AttributeError:
+                for d in self.devices:
+                    p = getattr(d, 'poll_'+name, None)
+                    if p is not None:
+                        await p()
+            else:
+                await p()
+        except OWFSReplyError as exc:
+            logger.exception("Poll '%s' on %s", name, self)
 
     async def poll_alarm(self):
         """Scan the 'alarm' subdirectory"""
