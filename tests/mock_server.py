@@ -155,7 +155,7 @@ async def some_server(tree, msgs, options, socket):
                 await rdr.write(-err.err, format_flags)
 
         _end(msgs)
-    except trio.BrokenStreamError:
+    except trio.BrokenResourceError:
         _end(msgs)
     finally:
         logger.debug("END Server")

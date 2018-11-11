@@ -1,5 +1,5 @@
 attrs >= 17.4
-trio
+trio >= 0.9
 anyio
 pytest
 pytest-cov
