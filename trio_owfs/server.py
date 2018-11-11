@@ -94,7 +94,7 @@ class Server:
                     if backoff < 10:
                         backoff *= 1.5
                 else:
-                    self._msg_proto = MessageProtocol(self.stream, is_server=False)
+                    self._msg_proto = MessageProtocol(self, is_server=False)
                     # re-send messages, but skip those that have been cancelled
                     logger.warning("Server %s restarting", self.host)
                     ml, self.requests = list(self.requests), deque()
@@ -123,7 +123,7 @@ class Server:
             if self.stream is not None:
                 raise RuntimeError("already open")
             self.stream = await anyio.connect_tcp(self.host, self.port)
-            self._msg_proto = MessageProtocol(self.stream, is_server=False)
+            self._msg_proto = MessageProtocol(self, is_server=False)
             await self.service.push_event(ServerConnected(self))
             v_w = ValueEvent()
             v_r = ValueEvent()
