@@ -73,12 +73,12 @@ class Service:
             polling = self.polling
 
         s = Server(self, host, port)
-        self.push_event(ServerRegistered(s))
+        await self.push_event(ServerRegistered(s))
         try:
             await s.start()
         except BaseException as exc:
             logger.exception("Could not start")
-            self.push_event(ServerDeregistered(s))
+            await self.push_event(ServerDeregistered(s))
             raise
         else:
             self._servers.add(s)
@@ -106,7 +106,7 @@ class Service:
                 await cls.setup_struct(s)
                 return
 
-    def get_device(self, id):
+    async def get_device(self, id):
         """
         Return the :class:`anyio_owfs.device.Device` instance for the device
         with this ID. Create it if it doesn't exist (this will trigger a .
@@ -116,7 +116,7 @@ class Service:
         except KeyError:
             dev = Device(self, id)
             self._devices[dev.id] = dev
-            self.push_event(DeviceAdded(dev))
+            await self.push_event(DeviceAdded(dev))
             return dev
 
     async def _add_task(self, val, proc, *args):
@@ -151,17 +151,17 @@ class Service:
         self._tasks.add(scope)
         return scope
 
-    def push_event(self, event):
+    async def push_event(self, event):
         if self._event_queue is not None:
-            self._event_queue.put_nowait(event)
+            await self._event_queue.put(event)
 
-    def _del_server(self, s):
+    async def _del_server(self, s):
         self._servers.remove(s)
-        self.push_event(ServerDeregistered(s))
+        await self.push_event(ServerDeregistered(s))
 
-    def _del_device(self, d):
+    async def _del_device(self, d):
         self._devices.remove(d)
-        self.push_event(DeviceDeleted(d))
+        await self.push_event(DeviceDeleted(d))
 
     @property
     def devices(self):
@@ -176,8 +176,7 @@ class Service:
         for s in list(self._servers):
             await s.drop()
         if self._event_queue is not None:
-            while not self._event_queue.empty():
-                await anyio.sleep(0)
+            await self._event_queue.put(None)
         for t in list(self._tasks):
             await t.cancel()
 
@@ -186,12 +185,12 @@ class Service:
     @property
     def events(self):
         class EventWrapper:
-            def __enter__(slf):
+            async def __aenter__(slf):
                 assert self._event_queue is None
                 self._event_queue = anyio.create_queue(1000)  # bus events
                 return slf
 
-            def __exit__(slf, *tb):
+            async def __aexit__(slf, *tb):
                 if tb[1] is None:
                     assert self._event_queue.empty()
                 self._event_queue.put_nowait(None)

@@ -326,22 +326,22 @@ class Device(SubDir):
     def buses(self):
         return set()
 
-    def locate(self, bus):
+    async def locate(self, bus):
         """The device has been seen here."""
         if self.bus is bus:
             return
         self.bus = bus
-        self.service.push_event(DeviceLocated(self))
+        await self.service.push_event(DeviceLocated(self))
 
-    def delocate(self, bus):
+    async def delocate(self, bus):
         """The device is no longer located here."""
         if self.bus is bus:
-            self._delocate()
+            await self._delocate()
 
-    def _delocate(self):
-        self.bus._del_device(self)
+    async def _delocate(self):
+        await self.bus._del_device(self)
         self.bus = None
-        self.service.push_event(DeviceNotFound(self))
+        await self.service.push_event(DeviceNotFound(self))
 
     async def attr_get(self, *attr: List[str]):
         """Read this attribute"""
@@ -441,7 +441,7 @@ class TemperatureDevice(Device):
 
     async def poll_temperature(self):
         t = await self.latesttemp
-        self.service.push_event(DeviceValue(self, "temperature", t))
+        await self.service.push_event(DeviceValue(self, "temperature", t))
 
     @property
     def temperature(self):

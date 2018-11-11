@@ -37,14 +37,14 @@ class Server:
         self._buses = dict()  # path => bus
         self._scan_lock = anyio.create_lock()
 
-    def get_bus(self, *path):
+    async def get_bus(self, *path):
         """Return the bus at this path. Allocate new if not existing."""
         try:
             return self._buses[path]
         except KeyError:
             bus = Bus(self, *path)
             self._buses[bus.path] = bus
-            self.service.push_event(BusAdded(bus))
+            await self.service.push_event(BusAdded(bus))
             return bus
 
     def __repr__(self):
@@ -78,7 +78,7 @@ class Server:
             async with self._connect_lock:
                 return
         async with self._connect_lock:
-            self.service.push_event(ServerDisconnected(self))
+            await self.service.push_event(ServerDisconnected(self))
             await self._write_scope.cancel()
             self._write_scope = None
             if not from_reader:
@@ -99,7 +99,7 @@ class Server:
                     logger.warning("Server %s restarting", self.host)
                     ml, self.requests = list(self.requests), deque()
                     self._wqueue = anyio.create_queue(100)
-                    self.service.push_event(ServerConnected(self))
+                    await self.service.push_event(ServerConnected(self))
                     v_w = ValueEvent()
                     await self.service.nursery.spawn(self._writer, v_w)
                     self._write_scope = await v_w.get()
@@ -109,7 +109,7 @@ class Server:
                         self._read_scope = await v_r.get()
                     for msg in ml:
                         if not msg.cancelled:
-                            self._wqueue.put_nowait(msg)
+                            await self._wqueue.put(msg)
                     return
 
     async def start(self):
@@ -124,7 +124,7 @@ class Server:
                 raise RuntimeError("already open")
             self.stream = await anyio.connect_tcp(self.host, self.port)
             self._msg_proto = MessageProtocol(self.stream, is_server=False)
-            self.service.push_event(ServerConnected(self))
+            await self.service.push_event(ServerConnected(self))
             v_w = ValueEvent()
             v_r = ValueEvent()
             await self.service.nursery.spawn(self._writer, v_w)
@@ -186,7 +186,7 @@ class Server:
         try:
             await self.aclose()
         finally:
-            self.service._del_server(self)
+            await self.service._del_server(self)
 
     async def aclose(self):
         if self.stream is None:
@@ -203,10 +203,10 @@ class Server:
             await self.stream.close()
         finally:
             self.stream = None
-            self.service.push_event(ServerDisconnected(self))
+            await self.service.push_event(ServerDisconnected(self))
 
         for b in list(self._buses.values()):
-            b.delocate()
+            await b.delocate()
         self._buses = None
 
     @property
@@ -247,7 +247,7 @@ class Server:
         # step 1: enumerate
         for d in await self.dir():
             if d.startswith("bus."):
-                bus = self.get_bus(d)
+                bus = await self.get_bus(d)
                 bus._unseen = 0
                 try:
                     old_paths.remove(d)
@@ -262,7 +262,7 @@ class Server:
             if bus is None:
                 continue
             if bus._unseen > 2:
-                bus.delocate()
+                await bus.delocate()
             else:
                 bus._unseen += 1
 

@@ -59,7 +59,7 @@ async def test_alarm(mock_clock):
     my_tree = deepcopy(basic_tree)
     dt = my_tree['bus.0'].pop('10.345678.90')
     async with server(tree=my_tree) as ow: # , polling=True, events=e1) as ow:
-        dev = ow.get_device("10.345678.90")
+        dev = await ow.get_device("10.345678.90")
         dev.interval_alarm = 10
         dev.interval_temperature = 15
 

@@ -28,7 +28,7 @@ Optionally, start an event monitor::
         await ow.add_task(monitor, ow)
 
     async def monitor(ow):
-        with ow.events as events:
+        async with ow.events as events:
             async for msg in events:
                 logger.info("%s", msg)
 
@@ -49,7 +49,7 @@ your configuration file.
 
 You can also ask by device ID, and get/set attributes if the device is present::
 
-    dev = ow.get_device("10.DBDB39010800.EF")
+    dev = await ow.get_device("10.DBDB39010800.EF")
     # this call triggers a :class:`trio_owfs.event.DeviceAdded` event
     # if the device is not yet known
 

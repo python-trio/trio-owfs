@@ -36,7 +36,7 @@ logger = logging.getLogger('examples.walk')
 __all__ = ['main']
 
 async def mon(ow, *, task_status=trio.TASK_STATUS_IGNORED):
-    with ow.events as events:
+    async with ow.events as events:
         task_status.started()
         async for msg in events:
             logger.info("%s", msg)

@@ -36,7 +36,7 @@ logger = logging.getLogger('examples.walk')
 __all__ = ['main']
 
 async def mon(ow, *, task_status=trio.TASK_STATUS_IGNORED):
-    with ow.events as events:
+    async with ow.events as events:
         task_status.started()
         async for msg in events:
             logger.info("%s", msg)
@@ -55,7 +55,7 @@ async def main(host, port, debug, id, attr, data):
         if debug:
             await ow.add_task(mon, ow)
         s = await ow.add_server(host, port)
-        dev = ow.get_device(id)
+        dev = await ow.get_device(id)
         if dev.bus is None:
             print("Device not found", file=sys.stderr)
         await dev.attr_set(attr, value=data)

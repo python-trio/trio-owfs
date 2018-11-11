@@ -171,7 +171,7 @@ class EventChecker:
     async def __call__(self, ow, task_status=trio.TASK_STATUS_IGNORED):
         self.pos = 0
         try:
-            with ow.events as ev:
+            async with ow.events as ev:
                 task_status.started()
                 async for e in ev:
                     logger.debug("Event %s", e)
