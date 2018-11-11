@@ -179,6 +179,9 @@ class Server:
                 except IncompleteRead:
                     await self.stream.close()
                     return  # wil be restarted by the reader
+                except BaseException:
+                    await self.stream.close()
+                    raise
 
     async def drop(self):
         """Stop talking and delete yourself"""
