@@ -441,6 +441,10 @@ class SwitchDevice(Device):
         b.append((self.id, "aux"))
         return b
 
+    async def poll_alarm(self):
+        """Clear alarm"""
+        res = await self.get_event_all()
+        await self.set_clearalarm(1)
 
 @register
 class TemperatureDevice(Device):
@@ -448,13 +452,11 @@ class TemperatureDevice(Device):
 
     interval_temperature = None
     interval_alarm = None
-    alarm_temperature = None
 
     async def poll_alarm(self):
         """Turn off alarm condition by adapting the temperature bounds
         """
         t = await self.latesttemp
-        self.alarm_temperature = t
         reasons = {'temp':t}
 
         t_h = await self.temphigh
@@ -465,7 +467,7 @@ class TemperatureDevice(Device):
         if t < t_l:
             await self.set_templow(int(t - 1))
             reasons['low'] = t_l
-        return 
+        return reasons
 
     def polling_items(self):
         yield from super().polling_items()
@@ -479,4 +481,52 @@ class TemperatureDevice(Device):
     @property
     def temperature(self):
         return self.latesttemp
+
+
+@register
+class VoltageDevice(Device):
+    family = 0x20
+
+    interval_voltage = None
+    interval_alarm = None
+    alarm_voltage = None
+
+    async def poll_alarm(self):
+        """Turn off alarm condition by adapting the voltage bounds
+        """
+        reasons = {}
+        v = await self.voltage_all
+        ah = await self.alarm.high_all
+        al = await self.alarm.low_all
+        pow = await self.set_alarm.unset
+        if pow:
+            reasons['power_on'] = True
+            pow = await self.set_alarm.set_unset(0)
+        if any(ah):
+            vh = await self.set_alarm.set_high_all
+            for i in range(4):
+                if not ah[i]:
+                    continue
+                reasons['high_'+str(i)] = vh[i]
+                await self.set_alarm.set_high(i,0)
+        if any(al):
+            vl = await self.set_alarm.set_low_all
+            for i in range(4):
+                if not al[i]:
+                    continue
+                reasons['low_'+str(i)] = vl[i]
+                await self.set_alarm.set_low(i,0)
+        for i in range(4):
+            reasons['volt_'+str(i)] = v[i]
+
+        return reasons
+
+    def polling_items(self):
+        yield from super().polling_items()
+        yield "voltage"
+        yield "alarm"
+
+    async def poll_voltage(self):
+        v = await self.volt_all
+        await self.service.push_event(DeviceValue(self, "volt_all", v))
 
