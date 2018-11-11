@@ -197,13 +197,14 @@ class Service:
             async def __aexit__(slf, *tb):
                 if tb[1] is None:
                     assert self._event_queue.empty()
-                self._event_queue.put_nowait(None)
                 self._event_queue = None
 
             def __aiter__(slf):
                 return slf
 
             async def __anext__(slf):
+                if self._event_queue is None:
+                    raise StopAsyncIteration
                 res = await self._event_queue.get()
                 if res is None:
                     raise StopAsyncIteration

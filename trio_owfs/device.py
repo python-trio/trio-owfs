@@ -308,8 +308,24 @@ class Device(SubDir):
         self.bus = None
 
         self._unseen = 0
+        self._events = []
 
         return self
+
+    def queue_event(self, evt):
+        """Remember this event. Used if an event arrives when the device
+        hasn't yet been set up by high-level code
+        """
+        self._events.append(evt)
+
+    @property
+    def queued_events(self):
+        """Return queued events. Shall be called exactly once."""
+        e,self._events = self._events,None
+        if e is None:
+            raise RuntimeError("You cannot call `queued_events` "
+                               "more than once")
+        return iter(e)
 
     @classmethod
     async def setup_struct(cls, server):
