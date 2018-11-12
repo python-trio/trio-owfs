@@ -109,8 +109,6 @@ class MessageProtocol:
         version, payload_len, ret_value, format_flags, data_len, offset = struct.unpack('!6i', hdr)
         if offset & 0x8000:
             offset = 0
-        elif offset != 0 and not is_server:
-            raise RuntimeError("I don't know how to handle offset>0")
         if version != 0:
             raise RuntimeError("Wrong version: %d" % (version,))
         if payload_len == -1 and data_len == 0 and offset == 0:
