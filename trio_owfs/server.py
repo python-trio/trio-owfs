@@ -7,6 +7,7 @@ from anyio.exceptions import IncompleteRead,ClosedResourceError
 from collections import deque
 from random import random
 from typing import Union
+from functools import partial
 
 from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded
@@ -30,11 +31,11 @@ class Server:
         self.stream = None
         self._msg_proto = None
         self.requests = deque()
-        self._connect_lock = anyio.create_lock()
         self._wqueue = anyio.create_queue(100)
         self._scan_task = None
         self._buses = dict()  # path => bus
         self._scan_lock = anyio.create_lock()
+        self._scan_args = {}
 
     async def get_bus(self, *path):
         """Return the bus at this path. Allocate new if not existing."""
@@ -62,79 +63,98 @@ class Server:
                 except ServerBusy as exc:
                     logger.info("Server %s busy", self.host)
                 except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError, ClosedResourceError):
-                    await self._reconnect(from_reader=True)
+                    await self._reconnect()
                     it = self._msg_proto.__aiter__()
-#                    except trio.ClosedResourceError:
-#                        return  # exiting
                 else:
                     msg = self.requests.popleft()
                     await msg.process_reply(res, data, self)
                     if not msg.done():
                         self.requests.appendleft(msg)
 
-    async def _reconnect(self, from_reader=False):
-        if self._connect_lock.locked():
-            async with self._connect_lock:
-                return
-        async with self._connect_lock:
-            await self.service.push_event(ServerDisconnected(self))
-            await self._write_scope.cancel()
-            self._write_scope = None
-            if not from_reader:
-                await self._read_scope.cancel()
-                self._read_scope = None
-            await self.stream.close()
-            backoff = 0.5
-            while True:
-                try:
-                    self.stream = await anyio.connect_tcp(self.host, self.port)
-                except OSError:
-                    await anyio.sleep(backoff)
-                    if backoff < 10:
-                        backoff *= 1.5
-                else:
-                    self._msg_proto = MessageProtocol(self, is_server=False)
-                    # re-send messages, but skip those that have been cancelled
-                    logger.warning("Server %s restarting", self.host)
-                    ml, self.requests = list(self.requests), deque()
-                    self._wqueue = anyio.create_queue(100)
-                    await self.service.push_event(ServerConnected(self))
-                    v_w = ValueEvent()
-                    await self.service.nursery.spawn(self._writer, v_w)
-                    self._write_scope = await v_w.get()
-                    if not from_reader:
-                        v_r = ValueEvent()
-                        await self.service.nursery.spawn(self._reader, v_r)
-                        self._read_scope = await v_r.get()
-                    for msg in ml:
-                        if not msg.cancelled:
-                            await self._wqueue.put(msg)
-                    return
+    async def _reconnect(self):
+        await self.service.push_event(ServerDisconnected(self))
+        await self._write_task.cancel()
+        self._write_task = None
+        if self._scan_task is not None:
+            await self._scan_task.cancel()
+            self._scan_task = None
+        await self.stream.close()
+        self.stream = None
 
-    async def start(self):
+        backoff = 0.2
+
+        while True:
+            try:
+                self.stream = await anyio.connect_tcp(self.host, self.port)
+            except OSError:
+                await anyio.sleep(backoff)
+                if backoff < 10:
+                    backoff *= 1.5
+            except BaseException as exc:
+                logger.exception("Owch")
+            else:
+                self._msg_proto = MessageProtocol(self, is_server=False)
+                # re-send messages, but skip those that have been cancelled
+                logger.warning("Server %s restarting", self.host)
+                ml, self.requests = list(self.requests), deque()
+                self._wqueue = anyio.create_queue(100)
+                await self.service.push_event(ServerConnected(self))
+                v_w = ValueEvent()
+                await self.service.nursery.spawn(self._writer, v_w)
+                self._write_task = await v_w.get()
+                for msg in ml:
+                    if not msg.cancelled:
+                        await self._wqueue.put(msg)
+                await self.service.nursery.spawn(partial(self.start_scan,**self._scan_args))
+                return
+
+    async def start(self, background=None):
         """Start talking. Returns when the connection is established,
-        raises an error if not possible.
+        raises an error if that's not possible.
 
         TODO: if the connection subsequently drops, it's re-established
         transparently.
         """
-        async with self._connect_lock:
-            if self.stream is not None:
-                raise RuntimeError("already open")
-            self.stream = await anyio.connect_tcp(self.host, self.port)
-            self._msg_proto = MessageProtocol(self, is_server=False)
-            await self.service.push_event(ServerConnected(self))
-            v_w = ValueEvent()
-            v_r = ValueEvent()
-            await self.service.nursery.spawn(self._writer, v_w)
-            await self.service.nursery.spawn(self._reader, v_r)
-            self._write_scope = await v_w.get()
-            self._read_scope = await v_r.get()
+        if background:
+            await self.service.add_task(self._start)
+            return
+            
+        if self.stream is not None:
+            if background is False:
+                return
+            raise RuntimeError("already open")
+        self.stream = await anyio.connect_tcp(self.host, self.port)
+        self._msg_proto = MessageProtocol(self, is_server=False)
+        await self.service.push_event(ServerConnected(self))
+        v_w = ValueEvent()
+        v_r = ValueEvent()
+        await self.service.nursery.spawn(self._writer, v_w)
+        await self.service.nursery.spawn(self._reader, v_r)
+        self._write_task = await v_w.get()
+        self._read_task = await v_r.get()
+
         try:
             await self.chat(NOPMsg(), fail=True)
         except BaseException:
             await self.aclose()
             raise
+
+    async def _start(self):
+        # try to start repeatedly
+        dly = 0.2
+        while True:
+            try:
+                await self.start(background=False)
+            except ConnectionRefusedError as exc:
+                logger.warning("Connection to %s:%s failed, will retry",
+                        self.host,self.port)
+            else:
+                await self.start_scan(**self._scan_args)
+                return
+            dly *= 1.5
+            if dly > 10:
+                dly = 10
+            await anyio.sleep(dly)
 
     async def setup_struct(self, dev):
         await dev.setup_struct(self)
@@ -191,15 +211,18 @@ class Server:
             await self.service._del_server(self)
 
     async def aclose(self):
+        if self._scan_task is not None:
+            await self._scan_task.cancel()
+            self._scan_task = None
+        if self._write_task is not None:
+            await self._write_task.cancel()
+            self._write_task = None
+        if self._read_task is not None:
+            await self._read_task.cancel()
+            self._read_task = None
+
         if self.stream is None:
             return
-
-        if self._write_scope is not None:
-            await self._write_scope.cancel()
-            self._write_scope = None
-        if self._read_scope is not None:
-            await self._read_scope.cancel()
-            self._read_scope = None
 
         try:
             await self.stream.close()
@@ -227,18 +250,15 @@ class Server:
             initial_interval *= 1+(random()-0.5)/random
         await anyio.sleep(initial_interval)
 
-        try:
-            while True:
-                async with self._scan_lock:
-                    await self.scan_now(polling=polling)
-                if not interval:
-                    return
-                i = interval
-                if random:
-                    i *= 1+(random()-0.5)/random
-                await anyio.sleep(i)
-        finally:
-            self._scan_task = None
+        while True:
+            async with self._scan_lock:
+                await self.scan_now(polling=polling)
+            if not interval:
+                return
+            i = interval
+            if random:
+                i *= 1+(random()-0.5)/random
+            await anyio.sleep(i)
 
     async def scan_now(self, polling=True):
         if self._scan_lock.locked():
@@ -291,6 +311,9 @@ class Server:
         :param polling: Flag whether to start tasks for periodic polling
             (alarm handling, temperature, …). Defaults to ``True``.
         """
+        self._scan_args = dict(scan=scan,initial_scan=initial_scan,polling=polling,random=random)
+        if self.stream is None:
+            return
         if not scan and not initial_scan:
             return
         if scan and scan < 1:

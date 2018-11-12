@@ -60,7 +60,7 @@ class Service:
 
     async def add_server(self, host: str, port: int = 4304, polling: Optional[bool] = None,
             scan: Union[float,bool,None] = None, initial_scan: Union[float,bool,None] = None,
-            random: Optional[int] = None):
+            random: Optional[int] = None, background: bool = False):
         """Add this server to the list.
         
         :param polling: if False, don't poll.
@@ -79,14 +79,13 @@ class Service:
         s = Server(self, host, port)
         await self.push_event(ServerRegistered(s))
         try:
-            await s.start()
+            await s.start(background=background)
         except BaseException as exc:
-            logger.exception("Could not start")
+            logger.error("Could not start %s:%s", host,port)
             await self.push_event(ServerDeregistered(s))
             raise
-        else:
-            self._servers.add(s)
-            await s.start_scan(scan=scan, initial_scan=initial_scan, polling=polling, random=random)
+        self._servers.add(s)
+        await s.start_scan(scan=scan, initial_scan=initial_scan, polling=polling, random=random)
         return s
 
     async def ensure_struct(self, dev, server=None, maybe=False):
@@ -196,7 +195,8 @@ class Service:
 
             async def __aexit__(slf, *tb):
                 if tb[1] is None:
-                    assert self._event_queue.empty()
+                    assert self._event_queue.empty(), \
+                           "Event processing stopped too soon"
                 self._event_queue = None
 
             def __aiter__(slf):
