@@ -194,9 +194,12 @@ class Service:
                 return slf
 
             async def __aexit__(slf, *tb):
-                if tb[1] is None:
-                    assert self._event_queue.empty(), \
-                           "Event processing stopped too soon"
+                if tb[1] is None and not self._event_queue.empty():
+                    async with anyio.open_cancel_scope(shield=True):
+                        while not self._event_queue.empty():
+                            evt = await self._event_queue.get()
+                            if evt is not None:
+                                logger.error("Unprocessed: %s",evt)
                 self._event_queue = None
 
             def __aiter__(slf):
