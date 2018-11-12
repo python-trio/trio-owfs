@@ -482,6 +482,9 @@ class TemperatureDevice(Device):
     def temperature(self):
         return self.latesttemp
 
+@register
+class TemperatureBDevice(Device):
+    family = 0x28
 
 @register
 class VoltageDevice(Device):
