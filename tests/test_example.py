@@ -188,6 +188,8 @@ async def test_wrong_msg_2():
             ServerRegistered,
             ServerConnected,
             ServerDisconnected,
+            ServerConnected,
+            ServerDisconnected,
             ServerDeregistered,
         ]
     )
@@ -257,7 +259,7 @@ async def test_basic_server():
     )
     async with server(tree=basic_tree) as ow: # msgs=msgs, events=e1) as ow:
         await trio.sleep(0)
-        dev = ow.get_device("10.345678.90")
+        dev = await ow.get_device("10.345678.90")
         assert dev.bus == ('bus.0',)
         assert isinstance(dev.bus, Bus)
         assert float(await dev.attr_get("temperature")) == 12.5
@@ -271,7 +273,7 @@ async def test_basic_structs(mock_clock):
     async with server(tree=basic_tree, options={'slow_every': [0, 1], 'busy_every': [0, 0, 1],
                                                 'close_every': [0, 0, 0, 1]}) as ow:
         await trio.sleep(0)
-        dev = ow.get_device("10.345678.90")
+        dev = await ow.get_device("10.345678.90")
         await ow.ensure_struct(dev)
         assert await dev.temperature == 12.5
         await dev.set_temphigh(98.25)
@@ -298,7 +300,7 @@ async def test_more_structs(mock_clock):
     mock_clock.autojump_threshold = 0.1
     async with server(tree=basic_tree) as ow:
         await trio.sleep(0)
-        dev = ow.get_device("10.345678.90")
+        dev = await ow.get_device("10.345678.90")
         await ow.ensure_struct(dev)
         assert await dev.temperature == 12.5
         await dev.set_temphigh(98.25)
@@ -548,7 +550,7 @@ async def test_dropped_device(mock_clock):
     )
     my_tree = deepcopy(basic_tree)
     async with server(tree=my_tree, msgs=msgs, events=e1) as ow:
-        dev = ow.get_device('10.345678.90')
+        dev = await ow.get_device('10.345678.90')
         assert dev.bus is not None
         del my_tree['bus.0']['10.345678.90']
         assert dev._unseen == 0
@@ -596,11 +598,11 @@ async def test_manual_device(mock_clock):
     my_tree = deepcopy(basic_tree)
     entry = my_tree['bus.0'].pop('10.345678.90')
     async with server(msgs=msgs, events=e1, tree=my_tree) as ow:
-        ow.push_event(Checkpoint())
-        dev = ow.get_device('10.345678.90')
+        await ow.push_event(Checkpoint())
+        dev = await ow.get_device('10.345678.90')
         assert dev.bus is None
         await trio.sleep(15)
-        ow.push_event(Checkpoint())
+        await ow.push_event(Checkpoint())
         my_tree['bus.0']['10.345678.90'] = entry
         await ow.scan_now(polling=False)
         assert dev.bus is not None
@@ -611,11 +613,11 @@ async def test_nonexistent_device(mock_clock):
     my_tree = deepcopy(basic_tree)
     entry = my_tree.pop('bus.0')
     async with server(tree=my_tree, scan=None) as ow:
-        bus = ow.test_server.get_bus('bus.0')
+        bus = await ow.test_server.get_bus('bus.0')
         assert bus.server == ow.test_server
 
-        dev = ow.get_device('10.345678.90')
-        dev.locate(bus)
+        dev = await ow.get_device('10.345678.90')
+        await dev.locate(bus)
         with pytest.raises(NoEntryError):
             assert float(await dev.attr_get("temperature")) == 12.5
 
@@ -650,11 +652,11 @@ async def test_manual_bus(mock_clock):
     )
     async with server(  #msgs=msgs, events=e1,
             tree=basic_tree, scan=None) as ow:
-        bus = ow.test_server.get_bus('bus.0')
+        bus = await ow.test_server.get_bus('bus.0')
         assert bus.server == ow.test_server
 
-        dev = ow.get_device('10.345678.90')
+        dev = await ow.get_device('10.345678.90')
         assert dev.bus is None
-        dev.locate(bus)
+        await dev.locate(bus)
         assert dev.bus is not None
         assert float(await dev.attr_get("temperature")) == 12.5

@@ -37,7 +37,6 @@ class ValueEvent:
         await self.event.set()
 
     def cancel(self):
-        import pdb;pdb.set_trace()
         self.set_error(anyio.CancelledError)
 
     async def get(self):

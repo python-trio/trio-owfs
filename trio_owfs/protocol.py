@@ -75,13 +75,21 @@ class Retry(Exception):
     pass
 
 
+master_id = 1
 class MessageProtocol:
     MAX_LENGTH = 9999
 
-    def __init__(self, stream, is_server=False):
-        self.stream = stream
+    def __init__(self, master, is_server=False):
+        self.master = master
+
+        global master_id
+        self.master_id = master_id
+        master_id += 1
+
+        self.stream = master.stream
         self.is_server = is_server
         self._buf = b''
+        logger.info("START %s %s",self.master_id,self.master)
 
     async def _read_buf(self, nbytes):
         while len(self._buf) < nbytes:
@@ -101,9 +109,6 @@ class MessageProtocol:
         version, payload_len, ret_value, format_flags, data_len, offset = struct.unpack('!6i', hdr)
         if offset & 0x8000:
             offset = 0
-        elif offset != 0 and not is_server:
-            import pdb
-            pdb.set_trace()
         if version != 0:
             raise RuntimeError("Wrong version: %d" % (version,))
         if payload_len == -1 and data_len == 0 and offset == 0:
@@ -114,7 +119,8 @@ class MessageProtocol:
             data_len = 0
         data = await self._read_buf(payload_len)
         logger.debug(
-            "OW recv%s %x %x %x %x %x %x %s", "S" if self.is_server else "", version, payload_len,
+            "OW%s recv%s %x %x %x %x %x %x %s", self.master_id, "S"
+            if self.is_server else "", version, payload_len,
             ret_value, format_flags, data_len, offset, repr(data)
         )
         if self.is_server:
@@ -126,13 +132,13 @@ class MessageProtocol:
     async def write(self, typ, flags, rlen=0, data=b'', offset=0):
         if data is None:
             logger.debug(
-                "OW send%s %x %x %x %x %x %x -", "S"
+                "OW%s send%s %x %x %x %x %x %x -", self.master_id, "S"
                 if self.is_server else "", 0, -1, typ, flags, rlen, offset
             )
             await self.stream.send_all(struct.pack("!6i", 0, -1, typ, flags, rlen, offset))
         else:
             logger.debug(
-                "OW send%s %x %x %x %x %x %x %s", "S"
+                "OW%s send%s %x %x %x %x %x %x %s", self.master_id, "S"
                 if self.is_server else "", 0, len(data), typ, flags, rlen, offset, repr(data)
             )
             await self.stream.send_all(

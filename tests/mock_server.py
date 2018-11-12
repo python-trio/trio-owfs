@@ -155,7 +155,7 @@ async def some_server(tree, msgs, options, socket):
                 await rdr.write(-err.err, format_flags)
 
         _end(msgs)
-    except trio.BrokenStreamError:
+    except trio.BrokenResourceError:
         _end(msgs)
     finally:
         logger.debug("END Server")
@@ -171,7 +171,7 @@ class EventChecker:
     async def __call__(self, ow, task_status=trio.TASK_STATUS_IGNORED):
         self.pos = 0
         try:
-            with ow.events as ev:
+            async with ow.events as ev:
                 task_status.started()
                 async for e in ev:
                     logger.debug("Event %s", e)
@@ -221,8 +221,10 @@ async def server(tree={}, msgs=(), options={}, events=None, polling=False, **kw)
                 await yield_(ow)
             finally:
                 ow.test_server = None
-                if s is not None:
-                    await s.drop()
-                ow.push_event(None)
-                await trio.sleep(0.1)
+                with trio.open_cancel_scope(shield=True):
+                    if s is not None:
+                        await s.drop()
+                    await ow.push_event(None)
+                    await trio.sleep(0.1)
                 n.cancel_scope.cancel()
+

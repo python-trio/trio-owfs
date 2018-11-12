@@ -118,7 +118,7 @@ class DeviceNotFound(DeviceEvent):
 @attr.s
 class DeviceAlarm(DeviceEvent):
     """The device triggered an alarm condition."""
-    reasons = attr.ib()
+    reasons = attr.ib(factory=dict)
     pass
 
 

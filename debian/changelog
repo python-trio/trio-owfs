@@ -1,3 +1,9 @@
+trio-owfs (0.7.0-1) smurf; urgency=medium
+
+  * New release
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 12 Nov 2018 09:34:11 +0100
+
 trio-owfs (0.6.7-1) smurf; urgency=medium
 
   * New release

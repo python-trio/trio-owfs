@@ -7,6 +7,7 @@ import anyio
 
 from .device import NotADevice, split_id, NoLocationKnown
 from .event import BusAdded, BusDeleted, DeviceAlarm
+from .error import OWFSReplyError
 
 import logging
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class Bus:
         self._unseen = 0  # didn't find when scanning
         self._tasks = dict()  # polltype => task
         self._intervals = dict()
+        self._random = dict() # varying intervals
 
     def __repr__(self):
         return "<%s:%s %s>" % (self.__class__.__name__, self.server, '/' + '/'.join(self.path))
@@ -50,17 +52,17 @@ class Bus:
         """Iterate over the sub.buses on this bus"""
         return list(self._buses.values())
 
-    def delocate(self):
+    async def delocate(self):
         """This bus can no longer be found"""
         if self._buses:
             for b in self.buses:
-                b.delocate()
+                await b.delocate()
             self._buses = None
         if self._devices:
             for d in self.devices:
-                d.delocate(bus=self)
+                await d.delocate(bus=self)
             self._devices = None
-        self.service.push_event(BusDeleted(self))
+        await self.service.push_event(BusDeleted(self))
 
     @property
     def all_buses(self):
@@ -68,7 +70,7 @@ class Bus:
         for b in self.buses:
             yield from b.all_buses
 
-    def get_bus(self, *path):
+    async def get_bus(self, *path):
         try:
             return self._buses[path]
         except TypeError:
@@ -76,7 +78,7 @@ class Bus:
         except KeyError:
             bus = Bus(self.server, *(self.path + path))
             self._buses[path] = bus
-            self.service.push_event(BusAdded(bus))
+            await self.service.push_event(BusAdded(bus))
             return bus
 
     async def _scan_one(self, polling=True):
@@ -90,24 +92,24 @@ class Bus:
             except NotADevice as err:
                 logger.debug("Not a device: %s", err)
                 continue
-            dev = self.service.get_device(d)
+            dev = await self.service.get_device(d)
             await self.service.ensure_struct(dev, server=self.server, maybe=True)
             if dev.bus is self:
                 old_devs.remove(d)
             else:
-                self.add_device(dev)
+                await self.add_device(dev)
             dev._unseen = 0
             logger.debug("Found %s/%s", '/'.join(self.path), d)
             for b in dev.buses():
                 buses.add(b)
-                bus = self.get_bus(*b)
+                bus = await self.get_bus(*b)
                 if bus is not None:
                     buses.update(await bus._scan_one(polling=polling))
 
         for d in old_devs:
             dev = self._devices[d]
             if dev._unseen > 2:
-                dev.delocate(self)
+                await dev.delocate(self)
             else:
                 dev._unseen += 1
         if polling:
@@ -118,14 +120,22 @@ class Bus:
         """Start all new polling jobs, terminate old ones"""
         items = set()
         intervals = dict()
+        randoms = dict()
         for dev in self.devices:
             for k in dev.polling_items():
                 i = dev.polling_interval(k)
                 if i is None:
                     continue
                 items.add(k)
+                if isinstance(i, (tuple,list)):
+                    i,j = i
+                else:
+                    j = None
                 oi = intervals.get(k, i)
                 intervals[k] = min(oi, i)
+                if j is not None:
+                    oi = randoms.get(k, j)
+                    randoms[k] = min(oi, j)
 
         old_items = set(self._tasks.keys()) - items
         for x in old_items:
@@ -133,6 +143,7 @@ class Bus:
             j.cancel()
 
         self._intervals.update(intervals)
+        self._random.update(randoms)
         for x in items:
             if x not in self._tasks:
                 self._tasks[x] = await self.service.add_task(self._poll, x)
@@ -140,16 +151,19 @@ class Bus:
     async def _poll(self, name):
         """Task to run a specific poll in the background"""
         while True:
-            i = self._intervals[name] * (1+(random()-0.5)/20)
+            i = self._intervals[name]
+            j = self._random.get(name, 0)
+            if j:
+                i *= (1+(random()-0.5)/j)
             logger.info("Delay %s for %f" % (name,i))
             await anyio.sleep(i)
             await self.poll(name)
 
-    def add_device(self, dev):
-        dev.locate(self)
+    async def add_device(self, dev):
+        await dev.locate(self)
         self._devices[dev.id] = dev
 
-    def _del_device(self, dev):
+    async def _del_device(self, dev):
         del self._devices[dev.id]
 
     def dir(self, *subpath):
@@ -173,22 +187,25 @@ class Bus:
         This typically runs via a :meth:`_poll` task, started by :meth:`update_poll`.
         """
         try:
-            p = getattr(self, 'poll_'+name)
-        except AttributeError:
-            for d in self.devices:
-                p = getattr(d, 'poll_'+name, None)
-                if p is not None:
-                    await p()
-        else:
-            await p()
+            try:
+                p = getattr(self, 'poll_'+name)
+            except AttributeError:
+                for d in self.devices:
+                    p = getattr(d, 'poll_'+name, None)
+                    if p is not None:
+                        await p()
+            else:
+                await p()
+        except OWFSReplyError as exc:
+            logger.exception("Poll '%s' on %s", name, self)
 
     async def poll_alarm(self):
         """Scan the 'alarm' subdirectory"""
         for dev in await self.dir("alarm"):
-            dev = self.service.get_device(dev)
-            self.add_device(dev)
+            dev = await self.service.get_device(dev)
+            await self.add_device(dev)
             reasons = await dev.poll_alarm()
-            self.service.push_event(DeviceAlarm(dev, reasons))
+            await self.service.push_event(DeviceAlarm(dev, reasons))
 
     async def _poll_simul(self, name, delay):
         """Write to a single 'simultaneous' entry"""

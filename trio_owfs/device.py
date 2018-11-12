@@ -39,69 +39,103 @@ def split_id(id):
         raise NotADevice(id)
     return a, b, c
 
-@attr.s
-class SimpleValue:
-    path = attr.ib()
-    typ = attr.ib()
+class _Value:
+    def __init__(self, path, typ):
+        self.path = path
+        self.typ = typ
+
+    def __repr__(self):
+        return "<%s: %s %s>" % (self.__class__.__name__,
+                                self.path, self.typ)
+
+class _RValue(_Value):
+    def __init__(self, path, typ):
+        super().__init__(path, typ)
+        if typ in {'f', 'g', 'p', 't'}:
+            self.conv = float
+        elif typ in {'i', 'u'}:
+            self.conv = int
+        elif typ == 'y':
+            self.conv = lambda x: bool(int(x))
+        elif typ == 'b':
+            self.conv = lambda x: x
+        else:
+            self.conv = lambda x: x.decode('utf-8')
+
+class _WValue(_Value):
+    def __init__(self, path, typ):
+        super().__init__(path, typ)
+        if typ == 'b':
+            self.conv = lambda x: x
+        elif typ == 'y':
+            self.conv = lambda x: b'1' if x else b'0'
+        else:
+            self.conv = lambda x: str(x).encode("utf-8")
+
+class SimpleValue(_RValue):
+    """Accessor for direct attribute access"""
 
     async def __get__(slf, self, cls):
         res = await self.dev.attr_get(*slf.path)
-        if slf.typ in {'f', 'g', 'p', 't'}:
-            res = float(res)
-        elif slf.typ in {'i', 'u'}:
-            res = int(res)
-        elif slf.typ == 'y':
-            res = bool(int(res))
-        elif slf.typ == 'b':
-            pass
-        else:
-            res = res.decode('utf-8')
-        return res
+        return slf.conv(res)
 
-@attr.s
-class SimpleGetter:
-    path = attr.ib()
-    typ = attr.ib()
+class SimpleGetter(_RValue):
+    """Accessor for get_* function"""
 
     def __get__(slf, self, cls):
         async def getter():
             res = await self.dev.attr_get(*slf.path)
-            if slf.typ in {'f', 'g', 'p', 't'}:
-                res = float(res)
-            elif slf.typ in {'i', 'u'}:
-                res = int(res)
-            elif slf.typ == 'y':
-                res = bool(int(res))
-            elif slf.typ == 'b':
-                pass
-            else:
-                res = res.decode('utf-8')
-            return res
+            return slf.conv(res)
 
         return getter
 
-@attr.s
-class SimpleSetter:
-    path = attr.ib()
-    typ = attr.ib()
+class SimpleSetter(_WValue):
+    """Accessor for set_* function"""
 
     def __get__(slf, self, cls):
         async def setter(val):
-            if slf.typ == 'b':
-                pass
-            elif slf.typ == 'y':
-                val = b'1' if val else b'0'
-            else:
-                val = str(val).encode("utf-8")
-            await self.dev.attr_set(*slf.path, value=val)
+            await self.dev.attr_set(*slf.path, value=slf.conv(val))
 
         return setter
 
-@attr.s
-class ArrayValue:
-    path = attr.ib()
-    typ = attr.ib()
-    num = attr.ib()
+class MultiValue(_RValue):
+    """Accessor for direct array access"""
+
+    async def __get__(slf, self, cls):
+        p = slf.path[:-1] + (slf.path[-1]+'.ALL',)
+        res = await self.dev.attr_get(*p)
+        conv = slf.conv
+        return [conv(v) for v in res.split(b',')]
+
+class MultiGetter(_RValue):
+    """Accessor for array get_* function"""
+
+    def __get__(slf, self, cls):
+        async def getter():
+            p = slf.path[:-1] + (slf.path[-1]+'.ALL',)
+            res = await self.dev.attr_get(*p)
+            conv = slf.conv
+            return [conv(v) for v in res.split(b',')]
+
+        return getter
+
+class MultiSetter(_WValue):
+    """Accessor for array set_* function"""
+
+    def __get__(slf, self, cls):
+        async def setter(val):
+            conv = slf.conv
+            p = slf.path[:-1] + (slf.path[-1]+'.ALL',)
+            val=b','.join(conv(v) for v in val)
+            await self.dev.attr_set(*p, value=val)
+
+        return setter
+
+class ArrayValue(_RValue):
+    """Accessor for direct array element access"""
+    def __init__(self, path, typ, num):
+        super().__init__(path, typ)
+        self.num = num
 
     def __get__(slf, self, cls):
         class IdxObj:
@@ -112,24 +146,14 @@ class ArrayValue:
                     idx = chr(ord('A')+idx)
                 p = slf.path[:-1] + (slf.path[-1]+'.'+idx,)
                 res = await self.dev.attr_get(*p)
-                if slf.typ in {'f', 'g', 'p', 't'}:
-                    res = float(res)
-                elif slf.typ in {'i', 'u'}:
-                    res = int(res)
-                elif slf.typ == 'y':
-                    res = bool(int(res))
-                elif slf.typ == 'b':
-                    pass
-                else:
-                    res = res.decode('utf-8')
-                return res
+                return slf.conv(res)
         return IdxObj()
 
-@attr.s
-class ArrayGetter:
-    path = attr.ib()
-    typ = attr.ib()
-    num = attr.ib()
+class ArrayGetter(_RValue):
+    """Accessor for array element get_* function"""
+    def __init__(self, path, typ, num):
+        super().__init__(path, typ)
+        self.num = num
 
     def __get__(slf, self, cls):
         async def getter(idx):
@@ -139,24 +163,14 @@ class ArrayGetter:
                 idx = chr(ord('A')+idx)
             p = slf.path[:-1] + (slf.path[-1]+'.'+idx,)
             res = await self.dev.attr_get(*p)
-            if slf.typ in {'f', 'g', 'p', 't'}:
-                res = float(res)
-            elif slf.typ in {'i', 'u'}:
-                res = int(res)
-            elif slf.typ == 'y':
-                res = bool(int(res))
-            elif slf.typ == 'b':
-                pass
-            else:
-                res = res.decode('utf-8')
-            return res
+            return slf.conv(res)
         return getter
 
-@attr.s
-class ArraySetter:
-    path = attr.ib()
-    typ = attr.ib()
-    num = attr.ib()
+class ArraySetter(_WValue):
+    """Accessor for array element set_* function"""
+    def __init__(self, path, typ, num):
+        super().__init__(path, typ)
+        self.num = num
 
     def __get__(slf, self, cls):
         async def setter(idx, val):
@@ -165,13 +179,7 @@ class ArraySetter:
             else:
                 idx = chr(ord('A')+idx)
             p = slf.path[:-1] + (slf.path[-1]+'.'+idx,)
-            if slf.typ == 'b':
-                pass
-            elif slf.typ == 'y':
-                val = b'1' if val else b'0'
-            else:
-                val = str(val).encode("utf-8")
-            await self.dev.attr_set(*p, value=val)
+            await self.dev.attr_set(*p, value=slf.conv(val))
         return setter
 
 class SubDir:
@@ -252,6 +260,15 @@ async def setup_accessors(server, cls, typ, *subdir):
                     if v[3] in {'wo', 'rw'}:
                         setattr(cls, 'set_' + d, ArraySetter(dd, v[0], num))
 
+                if v[3] in {'ro', 'rw'}:
+                    if hasattr(cls, d+'_all'):
+                        logger.warn("%s: not overwriting %s" % (cls, d+'_all'))
+                    else:
+                        setattr(cls, d+'_all', MultiValue(dd, v[0]))
+                    setattr(cls, 'get_' + d + '_all', MultiGetter(dd, v[0]))
+                if v[3] in {'wo', 'rw'}:
+                    setattr(cls, 'set_' + d + '_all', MultiSetter(dd, v[0]))
+
 
 
 class Device(SubDir):
@@ -291,8 +308,24 @@ class Device(SubDir):
         self.bus = None
 
         self._unseen = 0
+        self._events = []
 
         return self
+
+    def queue_event(self, evt):
+        """Remember this event. Used if an event arrives when the device
+        hasn't yet been set up by high-level code
+        """
+        self._events.append(evt)
+
+    @property
+    def queued_events(self):
+        """Return queued events. Shall be called exactly once."""
+        e,self._events = self._events,None
+        if e is None:
+            raise RuntimeError("You cannot call `queued_events` "
+                               "more than once")
+        return iter(e)
 
     @classmethod
     async def setup_struct(cls, server):
@@ -326,22 +359,22 @@ class Device(SubDir):
     def buses(self):
         return set()
 
-    def locate(self, bus):
+    async def locate(self, bus):
         """The device has been seen here."""
         if self.bus is bus:
             return
         self.bus = bus
-        self.service.push_event(DeviceLocated(self))
+        await self.service.push_event(DeviceLocated(self))
 
-    def delocate(self, bus):
+    async def delocate(self, bus):
         """The device is no longer located here."""
         if self.bus is bus:
-            self._delocate()
+            await self._delocate()
 
-    def _delocate(self):
-        self.bus._del_device(self)
+    async def _delocate(self):
+        await self.bus._del_device(self)
         self.bus = None
-        self.service.push_event(DeviceNotFound(self))
+        await self.service.push_event(DeviceNotFound(self))
 
     async def attr_get(self, *attr: List[str]):
         """Read this attribute"""
@@ -408,6 +441,10 @@ class SwitchDevice(Device):
         b.append((self.id, "aux"))
         return b
 
+    async def poll_alarm(self):
+        """Clear alarm"""
+        res = await self.get_event_all()
+        await self.set_clearalarm(1)
 
 @register
 class TemperatureDevice(Device):
@@ -415,13 +452,11 @@ class TemperatureDevice(Device):
 
     interval_temperature = None
     interval_alarm = None
-    alarm_temperature = None
 
     async def poll_alarm(self):
         """Turn off alarm condition by adapting the temperature bounds
         """
         t = await self.latesttemp
-        self.alarm_temperature = t
         reasons = {'temp':t}
 
         t_h = await self.temphigh
@@ -432,7 +467,7 @@ class TemperatureDevice(Device):
         if t < t_l:
             await self.set_templow(int(t - 1))
             reasons['low'] = t_l
-        return 
+        return reasons
 
     def polling_items(self):
         yield from super().polling_items()
@@ -441,9 +476,57 @@ class TemperatureDevice(Device):
 
     async def poll_temperature(self):
         t = await self.latesttemp
-        self.service.push_event(DeviceValue(self, "temperature", t))
+        await self.service.push_event(DeviceValue(self, "temperature", t))
 
     @property
     def temperature(self):
         return self.latesttemp
+
+
+@register
+class VoltageDevice(Device):
+    family = 0x20
+
+    interval_voltage = None
+    interval_alarm = None
+    alarm_voltage = None
+
+    async def poll_alarm(self):
+        """Turn off alarm condition by adapting the voltage bounds
+        """
+        reasons = {}
+        v = await self.voltage_all
+        ah = await self.alarm.high_all
+        al = await self.alarm.low_all
+        pow = await self.set_alarm.unset
+        if pow:
+            reasons['power_on'] = True
+            pow = await self.set_alarm.set_unset(0)
+        if any(ah):
+            vh = await self.set_alarm.set_high_all
+            for i in range(4):
+                if not ah[i]:
+                    continue
+                reasons['high_'+str(i)] = vh[i]
+                await self.set_alarm.set_high(i,0)
+        if any(al):
+            vl = await self.set_alarm.set_low_all
+            for i in range(4):
+                if not al[i]:
+                    continue
+                reasons['low_'+str(i)] = vl[i]
+                await self.set_alarm.set_low(i,0)
+        for i in range(4):
+            reasons['volt_'+str(i)] = v[i]
+
+        return reasons
+
+    def polling_items(self):
+        yield from super().polling_items()
+        yield "voltage"
+        yield "alarm"
+
+    async def poll_voltage(self):
+        v = await self.volt_all
+        await self.service.push_event(DeviceValue(self, "volt_all", v))
 
