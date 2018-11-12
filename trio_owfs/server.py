@@ -32,6 +32,8 @@ class Server:
         self._msg_proto = None
         self.requests = deque()
         self._wqueue = anyio.create_queue(100)
+        self._read_task = None
+        self._write_task = None
         self._scan_task = None
         self._buses = dict()  # path => bus
         self._scan_lock = anyio.create_lock()
@@ -73,8 +75,9 @@ class Server:
 
     async def _reconnect(self):
         await self.service.push_event(ServerDisconnected(self))
-        await self._write_task.cancel()
-        self._write_task = None
+        if self._write_task is not None:
+            await self._write_task.cancel()
+            self._write_task = None
         if self._scan_task is not None:
             await self._scan_task.cancel()
             self._scan_task = None
