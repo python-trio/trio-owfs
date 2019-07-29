@@ -7,7 +7,7 @@ Future plans
 Non-plans
 +++++++++
     
-Trio-OWFS will never support
+AsyncOWFS will never support
 
 * Cached bus access. If you want to cache a value, do it in Python.
 

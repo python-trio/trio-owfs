@@ -81,7 +81,7 @@ Re-scanning will automatically add new buses and devices, relocate moved
 devices, free buses which have been disconnected, and de-locate
 (i.e. remove the bus attribute from) devices that can no longer be found.
 
-Trio-OWFS transparently supports the `DS2509 <http://owfs.org/uploads/DS2409.html>` 
+AsyncOWFS transparently supports the `DS2509 <http://owfs.org/uploads/DS2409.html>` 
 bus coupler, by creating (and auto-scanning) two buses for its ``main`` and ``aux`` ports.
 Don't change its settings yourself; you're likely to confuse your ``owserver``.
 

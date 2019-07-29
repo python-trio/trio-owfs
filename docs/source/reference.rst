@@ -1,4 +1,4 @@
-Trio-owfs Reference
+AsyncOWFS Reference
 ===================
 
 .. module:: asyncowfs
