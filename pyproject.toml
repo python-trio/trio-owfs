@@ -1,5 +1,5 @@
 [tool.towncrier]
-package = "trio_owfs"
+package = "asyncowfs"
 filename = "docs/source/history.rst"
 directory = "newsfragments"
 underlines = ["-", "~", "^"]

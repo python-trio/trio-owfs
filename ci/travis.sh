@@ -57,7 +57,7 @@ pip install -U pip setuptools wheel
 
 if [ "$CHECK_FORMATTING" = "1" ]; then
     pip install yapf==${YAPF_VERSION}
-    if ! yapf -rpd setup.py trio_owfs; then
+    if ! yapf -rpd setup.py asyncowfs; then
         cat <<EOF
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -65,7 +65,7 @@ if [ "$CHECK_FORMATTING" = "1" ]; then
 Formatting problems were found (listed above). To fix them, run
 
    pip install yapf==${YAPF_VERSION}
-   yapf -rpi setup.py trio_owfs
+   yapf -rpi setup.py asyncowfs
 
 in your local checkout.
 
@@ -93,7 +93,7 @@ else
     mkdir empty
     cd empty
 
-    pytest -W error -ra -v --pyargs trio_owfs --cov=trio_owfs --cov-config=../.coveragerc --verbose ../tests
+    pytest -W error -ra -v --pyargs asyncowfs --cov=asyncowfs --cov-config=../.coveragerc --verbose ../tests
 
     bash <(curl -s https://codecov.io/bash)
 fi

@@ -2,12 +2,12 @@ import trio
 import pytest
 from copy import deepcopy
 
-from trio_owfs.protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg
-from trio_owfs.error import NoEntryError
-from trio_owfs.event import ServerRegistered, ServerConnected, ServerDisconnected, \
+from asyncowfs.protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg
+from asyncowfs.error import NoEntryError
+from asyncowfs.event import ServerRegistered, ServerConnected, ServerDisconnected, \
     ServerDeregistered, DeviceAdded, DeviceLocated, DeviceNotFound, BusAdded_Path, \
     BusAdded, BusDeleted, DeviceValue, DeviceAlarm
-from trio_owfs.bus import Bus
+from asyncowfs.bus import Bus
 
 from .mock_server import server, EventChecker
 from .structs import structs

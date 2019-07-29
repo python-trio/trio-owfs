@@ -1,7 +1,7 @@
 import trio
-from trio_owfs import OWFS
-from trio_owfs.protocol import MessageProtocol, OWMsg
-from trio_owfs.error import OWFSReplyError, NoEntryError, IsDirError
+from asyncowfs import OWFS
+from asyncowfs.protocol import MessageProtocol, OWMsg
+from asyncowfs.error import OWFSReplyError, NoEntryError, IsDirError
 try:
     from contextlib import asynccontextmanager
 except ImportError:

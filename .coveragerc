@@ -1,6 +1,6 @@
 [run]
 branch=True
-source=trio_owfs
+source=asyncowfs
 
 [report]
 precision = 1
