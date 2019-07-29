@@ -25,6 +25,7 @@ basic_tree = {
             "10.345678.90":
                 {
                     "whatever": "hello",
+                    "latesttemp": "12.5",
                     "temperature": "12.5",
                     "templow": "10",
                     "temphigh": "20",
