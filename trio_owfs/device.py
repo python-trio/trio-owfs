@@ -456,7 +456,7 @@ class TemperatureDevice(Device):
     async def poll_alarm(self):
         """Turn off alarm condition by adapting the temperature bounds
         """
-        t = await self.latesttemp
+        self.alarm_temperature = t = await self.latesttemp
         reasons = {'temp':t}
 
         t_h = await self.temphigh
