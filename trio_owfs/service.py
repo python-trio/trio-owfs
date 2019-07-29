@@ -2,8 +2,10 @@
 
 import anyio
 from functools import partial
-from async_generator import asynccontextmanager
-from async_generator import async_generator, yield_
+try:
+    from contextlib import asynccontextmanager
+except ImportError:
+    from async_generator import asynccontextmanager
 
 from typing import Optional,Union
 
@@ -217,9 +219,8 @@ class Service:
 
 
 @asynccontextmanager
-@async_generator
 async def OWFS(**kwargs):
     async with anyio.create_task_group() as n:
         s = Service(n, **kwargs)
         async with s:
-            await yield_(s)
+            yield s
