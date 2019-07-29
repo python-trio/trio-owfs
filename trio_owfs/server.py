@@ -211,9 +211,8 @@ class Server:
                     await self.stream.close()
                     return  # wil be restarted by the reader
                 except BaseException:
-                    if self.stream is not None:
-                        async with anyio.open_cancel_scope(shield=True):
-                            await self.stream.close()
+                    async with anyio.open_cancel_scope(shield=True):
+                        await self.aclose()
                     raise
 
     async def drop(self):
