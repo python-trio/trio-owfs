@@ -78,8 +78,8 @@ author = 'The Onewire for Trio authors'
 # built documents.
 #
 # The short X.Y version.
-import trio_owfs
-version = trio_owfs.__version__
+import asyncowfs
+version = asyncowfs.__version__
 # The full version, including alpha/beta/rc tags.
 release = version
 

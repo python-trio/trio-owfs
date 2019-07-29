@@ -1,7 +1,7 @@
 Release history
 ===============
 
-.. currentmodule:: trio_owfs
+.. currentmodule:: asyncowfs
 
 .. towncrier release notes start
 

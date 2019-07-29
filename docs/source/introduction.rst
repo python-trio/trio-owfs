@@ -6,14 +6,14 @@ Introduction
 
 .. [#] Setting up an `owserver <http://owfs.org/uploads/owserver.html>`_ instance not included.
 
-Zeroth, decide on an asyncio library. Despite its name, ``trio_owfs`` works
+Zeroth, decide on an asyncio library. Despite its name, ``asyncowfs`` works
 with ``trio``, Python's standard ``asyncio``, or ``curio``. This author
 prefers ``trio``.
 
 First, create an OWFS instance::
 
     import trio
-    from trio_owfs import OWFS
+    from asyncowfs import OWFS
 
     async def main():
         async with OWFS() as ow:
@@ -43,14 +43,14 @@ The connection to the server is kept alive and will automatically be
 re-established until you leave the ``with OWFS()`` block, or call
 ``await s.aclose()``.
 
-Your event monitor receives a :class:`trio_owfs.event.DeviceLocated` event
+Your event monitor receives a :class:`asyncowfs.event.DeviceLocated` event
 for each 1wire slave; in a more complicated program, it should match them with
 your configuration file.
 
 You can also ask by device ID, and get/set attributes if the device is present::
 
     dev = await ow.get_device("10.DBDB39010800.EF")
-    # this call triggers a :class:`trio_owfs.event.DeviceAdded` event
+    # this call triggers a :class:`asyncowfs.event.DeviceAdded` event
     # if the device is not yet known
 
     if dev.bus is None:
