@@ -114,7 +114,8 @@ class Service:
     async def get_device(self, id):
         """
         Return the :class:`anyio_owfs.device.Device` instance for the device
-        with this ID. Create it if it doesn't exist (this will trigger a .
+        with this ID. Create it if it doesn't exist (this will trigger a
+        `DeviceAdded` event).
         """
         try:
             return self._devices[id]
