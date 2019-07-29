@@ -30,8 +30,12 @@ async def _schk(v):
     await trio.sleep(v[v[0]])
 
 
+class FakeMaster:
+    def __init__(self, stream):
+        self.stream = stream
+
 async def some_server(tree, msgs, options, socket):
-    rdr = MessageProtocol(socket, is_server=True)
+    rdr = MessageProtocol(FakeMaster(socket), is_server=True)
     logger.debug("START Server")
     if msgs:
         midx = 0
