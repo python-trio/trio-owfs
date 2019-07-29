@@ -475,6 +475,8 @@ async def test_disconnecting_server():
             ServerDisconnected,
             ServerConnected,
             DeviceAdded("10.345678.90"),
+            ServerDisconnected,
+            ServerConnected,
             DeviceLocated("10.345678.90"),
             ServerDisconnected,
             DeviceNotFound("10.345678.90"),
@@ -482,7 +484,7 @@ async def test_disconnecting_server():
             ServerDeregistered,
         ]
     )
-    async with server(msgs=msgs, events=e1, tree=basic_tree,
+    async with server(tree=basic_tree, # msgs=msgs, # events=e1,
                       options={'close_every': [0, 0, 0, 1]}):  # as ow:
         await trio.sleep(0)
 
@@ -518,7 +520,7 @@ async def test_disconnecting_server_2(mock_clock):
         ]
     )
     async with server(tree=basic_tree, # msgs=msgs, events=e1, tree=basic_tree,
-                      options={'close_every': [0, 1, 0, 0]}):  # as ow:
+                      options={'close_every': [0, 0, 1, 0, 0]}):  # as ow:
         await trio.sleep(0)
 
 
@@ -653,7 +655,7 @@ async def test_manual_bus(mock_clock):
         ]
     )
     async with server(  #msgs=msgs, events=e1,
-            tree=basic_tree, scan=None) as ow:
+            tree=basic_tree, scan=None, initial_scan=False) as ow:
         bus = await ow.test_server.get_bus('bus.0')
         assert bus.server == ow.test_server
 
