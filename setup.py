@@ -24,7 +24,7 @@ setup(
     use_scm_version={"version_scheme": "guess-next-dev", "local_scheme": "dirty-tag"},
     setup_requires=["setuptools_scm"],
     description="Async access to 1wire (asyncio,trio,curio)",
-    url="https://github.com/python-trio/trio-owfs",
+    url="https://github.com/smurfix/asyncowfs",
     long_description=LONG_DESC,
     author="Matthias Urlichs",
     author_email="matthias@urlichs.de",
