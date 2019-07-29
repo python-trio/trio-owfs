@@ -3,6 +3,7 @@ Devices.
 """
 
 import attr
+import anyio
 from functools import partial
 from typing import List, Optional
 
@@ -309,6 +310,7 @@ class Device(SubDir):
 
         self._unseen = 0
         self._events = []
+        self._wait_bus = anyio.create_event()
 
         return self
 
@@ -364,11 +366,16 @@ class Device(SubDir):
         if self.bus is bus:
             return
         self.bus = bus
+        await self._wait_bus.set()
         await self.service.push_event(DeviceLocated(self))
+
+    async def wait_bus(self):
+        await self._wait_bus.wait()
 
     async def delocate(self, bus):
         """The device is no longer located here."""
         if self.bus is bus:
+            self._wait_bus = anyio.create_event()
             await self._delocate()
 
     async def _delocate(self):

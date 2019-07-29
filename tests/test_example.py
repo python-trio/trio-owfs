@@ -276,6 +276,7 @@ async def test_basic_structs(mock_clock):
         await trio.sleep(0)
         dev = await ow.get_device("10.345678.90")
         await ow.ensure_struct(dev)
+        await dev.wait_bus()
         assert await dev.temperature == 12.5
         await dev.set_temphigh(98.25)
         assert await dev.temphigh == 98.25
