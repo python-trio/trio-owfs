@@ -3,26 +3,26 @@
    :alt: Join chatroom
 
 .. image:: https://img.shields.io/badge/docs-read%20now-blue.svg
-   :target: https://trio-owfs.readthedocs.io/en/latest/?badge=latest
+   :target: https://asyncowfs.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
    
-.. image:: https://img.shields.io/pypi/v/trio-owfs.svg
-   :target: https://pypi.org/project/trio-owfs
+.. image:: https://img.shields.io/pypi/v/asyncowfs.svg
+   :target: https://pypi.org/project/asyncowfs
    :alt: Latest PyPi version
 
-.. image:: https://travis-ci.org/python-trio/trio-owfs.svg?branch=master
-   :target: https://travis-ci.org/python-trio/trio-owfs
+.. image:: https://travis-ci.org/python-trio/asyncowfs.svg?branch=master
+   :target: https://travis-ci.org/python-trio/asyncowfs
    :alt: Automated test status
 
-.. image:: https://codecov.io/gh/python-trio/trio-owfs/branch/master/graph/badge.svg
-   :target: https://codecov.io/gh/python-trio/trio-owfs
+.. image:: https://codecov.io/gh/python-trio/asyncowfs/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/python-trio/asyncowfs
    :alt: Test coverage
 
 
 Async 1wire
 ===========
 
-Welcome to `Async 1wire <https://github.com/python-trio/trio-owfs>`__!
+Welcome to `Async 1wire <https://github.com/smurfix/asyncowfs>`__!
 
 This library allows you to access 1wire buses with Python, using any
 async library (trio, asyncio, curio).

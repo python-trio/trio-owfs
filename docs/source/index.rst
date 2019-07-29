@@ -24,7 +24,7 @@ Prerequisites:
 
 .. toctree::
    :maxdepth: 2
-   :caption: Trio-OWFS's manual:
+   :caption: AsyncOWFS's manual:
 
    introduction.rst
    todo.rst
