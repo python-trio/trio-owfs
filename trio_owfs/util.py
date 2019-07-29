@@ -16,7 +16,7 @@ class ValueEvent:
 
     """
 
-    event = attr.ib(factory=anyio.create_event)
+    event = attr.ib(factory=anyio.create_event, init=False)
     value = attr.ib(default=None, init=False)
 
     async def set(self, value):
