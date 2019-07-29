@@ -3,6 +3,7 @@ Devices.
 """
 
 import attr
+import anyio
 from functools import partial
 from typing import List, Optional
 
@@ -242,7 +243,7 @@ async def setup_accessors(server, cls, typ, *subdir):
                 if num is None:
                     if v[3] in {'ro', 'rw'}:
                         if hasattr(cls, d):
-                            logger.warn("%s: not overwriting %s" % (cls, d))
+                            logger.warning("%s: not overwriting %s" % (cls, d))
                         else:
                             setattr(cls, d, SimpleValue(dd, v[0]))
                         setattr(cls, 'get_' + d, SimpleGetter(dd, v[0]))
@@ -253,7 +254,7 @@ async def setup_accessors(server, cls, typ, *subdir):
                     dd = subdir + (d,)
                     if v[3] in {'ro', 'rw'}:
                         if hasattr(cls, d):
-                            logger.warn("%s: not overwriting %s" % (cls, d))
+                            logger.warning("%s: not overwriting %s" % (cls, d))
                         else:
                             setattr(cls, d, ArrayValue(dd, v[0], num))
                         setattr(cls, 'get_' + d, ArrayGetter(dd, v[0], num))
@@ -262,7 +263,7 @@ async def setup_accessors(server, cls, typ, *subdir):
 
                 if v[3] in {'ro', 'rw'}:
                     if hasattr(cls, d+'_all'):
-                        logger.warn("%s: not overwriting %s" % (cls, d+'_all'))
+                        logger.warning("%s: not overwriting %s" % (cls, d+'_all'))
                     else:
                         setattr(cls, d+'_all', MultiValue(dd, v[0]))
                     setattr(cls, 'get_' + d + '_all', MultiGetter(dd, v[0]))
@@ -309,6 +310,7 @@ class Device(SubDir):
 
         self._unseen = 0
         self._events = []
+        self._wait_bus = anyio.create_event()
 
         return self
 
@@ -364,11 +366,16 @@ class Device(SubDir):
         if self.bus is bus:
             return
         self.bus = bus
+        await self._wait_bus.set()
         await self.service.push_event(DeviceLocated(self))
+
+    async def wait_bus(self):
+        await self._wait_bus.wait()
 
     async def delocate(self, bus):
         """The device is no longer located here."""
         if self.bus is bus:
+            self._wait_bus = anyio.create_event()
             await self._delocate()
 
     async def _delocate(self):
@@ -456,7 +463,7 @@ class TemperatureDevice(Device):
     async def poll_alarm(self):
         """Turn off alarm condition by adapting the temperature bounds
         """
-        t = await self.latesttemp
+        self.alarm_temperature = t = await self.latesttemp
         reasons = {'temp':t}
 
         t_h = await self.temphigh
@@ -482,6 +489,9 @@ class TemperatureDevice(Device):
     def temperature(self):
         return self.latesttemp
 
+@register
+class TemperatureBDevice(Device):
+    family = 0x28
 
 @register
 class VoltageDevice(Device):

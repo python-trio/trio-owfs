@@ -78,8 +78,8 @@ author = 'The Onewire for Trio authors'
 # built documents.
 #
 # The short X.Y version.
-import trio_owfs
-version = trio_owfs.__version__
+import asyncowfs
+version = asyncowfs.__version__
 # The full version, including alpha/beta/rc tags.
 release = version
 
@@ -142,7 +142,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'trio-owfs-doc'
+htmlhelp_basename = 'asyncowfs-doc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -169,7 +169,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'trio-owfs.tex', 'Trio Documentation',
+    (master_doc, 'asyncowfs.tex', 'Trio Documentation',
      author, 'manual'),
 ]
 
@@ -179,7 +179,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'trio-owfs', 'Onewire for Trio Documentation',
+    (master_doc, 'asyncowfs', 'Onewire for Trio Documentation',
      [author], 1)
 ]
 
@@ -190,7 +190,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'trio-owfs', 'Onewire for Trio Documentation',
+    (master_doc, 'asyncowfs', 'Onewire for Trio Documentation',
      author, 'Onewire for Trio', 'Access to 1wire',
      'Miscellaneous'),
 ]

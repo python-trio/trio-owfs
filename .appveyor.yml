@@ -21,6 +21,6 @@ test_script:
   - "mkdir empty"
   - "cd empty"
   # Make sure it's being imported from where we expect
-  - "python -c \"import os, trio_owfs; print(os.path.dirname(trio_owfs.__file__))\""
-  - "python -u -m pytest -W error -ra -v -s --pyargs trio_owfs --cov=trio_owfs --cov-config=../.coveragerc"
+  - "python -c \"import os, asyncowfs; print(os.path.dirname(asyncowfs.__file__))\""
+  - "python -u -m pytest -W error -ra -v -s --pyargs asyncowfs --cov=asyncowfs --cov-config=../.coveragerc"
   - "codecov"

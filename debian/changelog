@@ -1,3 +1,9 @@
+asyncowfs (0.9.1-1) unstable; urgency=medium
+
+  * Rename
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 29 Jul 2019 21:27:49 +0200
+
 trio-owfs (0.7.0-1) smurf; urgency=medium
 
   * New release

@@ -1,9 +1,11 @@
 import trio
-from trio_owfs import OWFS
-from trio_owfs.protocol import MessageProtocol, OWMsg
-from trio_owfs.error import OWFSReplyError, NoEntryError, IsDirError
-from async_generator import asynccontextmanager
-from async_generator import async_generator, yield_
+from asyncowfs import OWFS
+from asyncowfs.protocol import MessageProtocol, OWMsg
+from asyncowfs.error import OWFSReplyError, NoEntryError, IsDirError
+try:
+    from contextlib import asynccontextmanager
+except ImportError:
+    from async_generator import asynccontextmanager
 from functools import partial
 
 import logging
@@ -30,8 +32,12 @@ async def _schk(v):
     await trio.sleep(v[v[0]])
 
 
+class FakeMaster:
+    def __init__(self, stream):
+        self.stream = stream
+
 async def some_server(tree, msgs, options, socket):
-    rdr = MessageProtocol(socket, is_server=True)
+    rdr = MessageProtocol(FakeMaster(socket), is_server=True)
     logger.debug("START Server")
     if msgs:
         midx = 0
@@ -202,8 +208,7 @@ class EventChecker:
 
 
 @asynccontextmanager
-@async_generator
-async def server(tree={}, msgs=(), options={}, events=None, polling=False, **kw):
+async def server(tree={}, msgs=(), options={}, events=None, polling=False, scan=None, initial_scan=True, **kw):
     async with OWFS(**kw) as ow:
         async with trio.open_nursery() as n:
             s = None
@@ -216,12 +221,12 @@ async def server(tree={}, msgs=(), options={}, events=None, polling=False, **kw)
                     await n.start(events, ow)
                 addr = server[0].socket.getsockname()
 
-                s = await ow.add_server(*addr, polling=polling)
+                s = await ow.add_server(*addr, polling=polling, scan=scan, initial_scan=initial_scan)
                 ow.test_server = s
-                await yield_(ow)
+                yield ow
             finally:
                 ow.test_server = None
-                with trio.open_cancel_scope(shield=True):
+                with trio.CancelScope(shield=True):
                     if s is not None:
                         await s.drop()
                     await ow.push_event(None)

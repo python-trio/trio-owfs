@@ -28,8 +28,8 @@ import trio
 import collections
 
 import trio_click as click
-from trio_owfs import OWFS
-import trio_owfs.error as err
+from asyncowfs import OWFS
+import asyncowfs.error as err
 
 import logging
 logger = logging.getLogger('examples.walk')

@@ -2,8 +2,10 @@
 
 import anyio
 from functools import partial
-from async_generator import asynccontextmanager
-from async_generator import async_generator, yield_
+try:
+    from contextlib import asynccontextmanager
+except ImportError:
+    from async_generator import asynccontextmanager
 
 from typing import Optional,Union
 
@@ -112,7 +114,8 @@ class Service:
     async def get_device(self, id):
         """
         Return the :class:`anyio_owfs.device.Device` instance for the device
-        with this ID. Create it if it doesn't exist (this will trigger a .
+        with this ID. Create it if it doesn't exist (this will trigger a
+        `DeviceAdded` event).
         """
         try:
             return self._devices[id]
@@ -194,9 +197,12 @@ class Service:
                 return slf
 
             async def __aexit__(slf, *tb):
-                if tb[1] is None:
-                    assert self._event_queue.empty(), \
-                           "Event processing stopped too soon"
+                if tb[1] is None and not self._event_queue.empty():
+                    async with anyio.open_cancel_scope(shield=True):
+                        while not self._event_queue.empty():
+                            evt = await self._event_queue.get()
+                            if evt is not None:
+                                logger.error("Unprocessed: %s",evt)
                 self._event_queue = None
 
             def __aiter__(slf):
@@ -214,9 +220,8 @@ class Service:
 
 
 @asynccontextmanager
-@async_generator
 async def OWFS(**kwargs):
     async with anyio.create_task_group() as n:
         s = Service(n, **kwargs)
         async with s:
-            await yield_(s)
+            yield s

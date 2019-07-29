@@ -1,7 +1,5 @@
 from setuptools import setup, find_packages
 
-exec(open("trio_owfs/_version.py", encoding="utf-8").read())
-
 LONG_DESC = """\
 This library allows you to access 1wire buses with Python, using any
 async library (trio, asyncio, curio).
@@ -22,10 +20,11 @@ prefers Trio.
 """
 
 setup(
-    name="trio-owfs",
-    version=__version__,  # noqa: W291,F821
+    name="asyncowfs",
+    use_scm_version={"version_scheme": "guess-next-dev", "local_scheme": "dirty-tag"},
+    setup_requires=["setuptools_scm"],
     description="Async access to 1wire (asyncio,trio,curio)",
-    url="https://github.com/python-trio/trio-owfs",
+    url="https://github.com/smurfix/asyncowfs",
     long_description=LONG_DESC,
     author="Matthias Urlichs",
     author_email="matthias@urlichs.de",

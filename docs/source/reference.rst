@@ -1,7 +1,7 @@
-Trio-owfs Reference
+AsyncOWFS Reference
 ===================
 
-.. module:: trio_owfs
+.. module:: asyncowfs
 
 
 Entry point
@@ -14,21 +14,21 @@ The base for accessing the 1wire system is an async context::
 
 .. autofunction:: OWFS
 
-.. automodule:: trio_owfs.service
+.. automodule:: asyncowfs.service
    :members:
 
-.. automodule:: trio_owfs.server
+.. automodule:: asyncowfs.server
    :members:
 
-.. automodule:: trio_owfs.bus
+.. automodule:: asyncowfs.bus
    :members:
 
-.. automodule:: trio_owfs.device
+.. automodule:: asyncowfs.device
    :members:
 
-.. automodule:: trio_owfs.event
+.. automodule:: asyncowfs.event
    :members:
 
-.. automodule:: trio_owfs.error
+.. automodule:: asyncowfs.error
    :members:
 

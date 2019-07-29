@@ -42,23 +42,23 @@ To run tests
 * Install requirements: ``pip install -r ci/test-requirements.txt``
   (possibly in a virtualenv)
 
-* Actually run the tests: ``pytest trio_owfs``
+* Actually run the tests: ``pytest asyncowfs``
 
 
 To run yapf
 -----------
 
 * Show what changes yapf wants to make: ``yapf -rpd setup.py
-  trio_owfs``
+  asyncowfs``
 
 * Apply all changes directly to the source tree: ``yapf -rpi setup.py
-  trio_owfs``
+  asyncowfs``
 
 
 To make a release
 -----------------
 
-* Update the version in ``trio_owfs/_version.py``
+* Update the version in ``asyncowfs/_version.py``
 
 * Run ``towncrier`` to collect your release notes.
 

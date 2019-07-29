@@ -8,6 +8,7 @@ from collections import deque
 from random import random
 from typing import Union
 from functools import partial
+from concurrent.futures import CancelledError
 
 from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded
@@ -32,6 +33,8 @@ class Server:
         self._msg_proto = None
         self.requests = deque()
         self._wqueue = anyio.create_queue(100)
+        self._read_task = None
+        self._write_task = None
         self._scan_task = None
         self._buses = dict()  # path => bus
         self._scan_lock = anyio.create_lock()
@@ -62,6 +65,10 @@ class Server:
                         res, data = await it.__anext__()
                 except ServerBusy as exc:
                     logger.info("Server %s busy", self.host)
+                    msg = self.requests.popleft()
+                    if not msg.cancelled:
+                        await self._wqueue.put(msg)
+
                 except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError, ClosedResourceError):
                     await self._reconnect()
                     it = self._msg_proto.__aiter__()
@@ -73,8 +80,9 @@ class Server:
 
     async def _reconnect(self):
         await self.service.push_event(ServerDisconnected(self))
-        await self._write_task.cancel()
-        self._write_task = None
+        if self._write_task is not None:
+            await self._write_task.cancel()
+            self._write_task = None
         if self._scan_task is not None:
             await self._scan_task.cancel()
             self._scan_task = None
@@ -176,8 +184,8 @@ class Server:
                 except Retry:
                     # The message has been repeated.
                     pass
-        except BaseException:
-            msg.cancel()
+        except BaseException as exc:
+            await msg.cancel()
             raise
 
     async def _writer(self, val):
@@ -196,11 +204,15 @@ class Server:
 #                except trio.ClosedResourceError:
 #                    # will get restarted by .reconnect()
 #                    return
+                except EnvironmentError as err:
+                    logger.warning("Write error: %r", err)
+                    return  # will be noticed by the reader
                 except IncompleteRead:
                     await self.stream.close()
                     return  # wil be restarted by the reader
                 except BaseException:
-                    await self.stream.close()
+                    async with anyio.open_cancel_scope(shield=True):
+                        await self.aclose()
                     raise
 
     async def drop(self):
@@ -233,6 +245,8 @@ class Server:
         for b in list(self._buses.values()):
             await b.delocate()
         self._buses = None
+        for m in self.requests:
+            await m.cancel()
 
     @property
     def all_buses(self):
@@ -273,16 +287,19 @@ class Server:
         old_paths = set()
 
         # step 1: enumerate
-        for d in await self.dir():
-            if d.startswith("bus."):
-                bus = await self.get_bus(d)
-                bus._unseen = 0
-                try:
-                    old_paths.remove(d)
-                except KeyError:
-                    pass
-                buses = await bus._scan_one(polling=polling)
-                old_paths -= buses
+        try:
+            for d in await self.dir():
+                if d.startswith("bus."):
+                    bus = await self.get_bus(d)
+                    bus._unseen = 0
+                    try:
+                        old_paths.remove(d)
+                    except KeyError:
+                        pass
+                    buses = await bus._scan_one(polling=polling)
+                    old_paths -= buses
+        except CancelledError:
+            return
 
         # step 2: deregister buses, if not seen often enough
         for p in old_paths:

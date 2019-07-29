@@ -4,7 +4,7 @@ import attr
 import outcome
 
 import anyio
-
+from concurrent.futures import CancelledError
 
 @attr.s
 class ValueEvent:
@@ -16,7 +16,7 @@ class ValueEvent:
 
     """
 
-    event = attr.ib(factory=anyio.create_event)
+    event = attr.ib(factory=anyio.create_event, init=False)
     value = attr.ib(default=None, init=False)
 
     async def set(self, value):
@@ -36,8 +36,8 @@ class ValueEvent:
         self.value = outcome.Error(exc)
         await self.event.set()
 
-    def cancel(self):
-        self.set_error(anyio.CancelledError)
+    async def cancel(self):
+        await self.set_error(CancelledError())
 
     async def get(self):
         """Block until the internal flag value becomes True.

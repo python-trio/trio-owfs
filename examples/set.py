@@ -28,7 +28,7 @@ import trio
 import collections
 
 import trio_click as click
-from trio_owfs import OWFS
+from asyncowfs import OWFS
 
 import logging
 logger = logging.getLogger('examples.walk')
