@@ -204,6 +204,9 @@ class Server:
 #                except trio.ClosedResourceError:
 #                    # will get restarted by .reconnect()
 #                    return
+                except EnvironmentError as err:
+                    logger.warning("Write error: %r", err)
+                    return  # will be noticed by the reader
                 except IncompleteRead:
                     await self.stream.close()
                     return  # wil be restarted by the reader
