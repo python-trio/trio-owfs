@@ -64,6 +64,10 @@ class Server:
                         res, data = await it.__anext__()
                 except ServerBusy as exc:
                     logger.info("Server %s busy", self.host)
+                    msg = self.requests.popleft()
+                    if not msg.cancelled:
+                        await self._wqueue.put(msg)
+
                 except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError, ClosedResourceError):
                     await self._reconnect()
                     it = self._msg_proto.__aiter__()
