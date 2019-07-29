@@ -221,7 +221,7 @@ async def server(tree={}, msgs=(), options={}, events=None, polling=False, **kw)
                 await yield_(ow)
             finally:
                 ow.test_server = None
-                with trio.open_cancel_scope(shield=True):
+                with trio.CancelScope(shield=True):
                     if s is not None:
                         await s.drop()
                     await ow.push_event(None)
