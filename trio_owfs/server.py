@@ -8,6 +8,7 @@ from collections import deque
 from random import random
 from typing import Union
 from functools import partial
+from concurrent.futures import CancelledError
 
 from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded
@@ -183,8 +184,8 @@ class Server:
                 except Retry:
                     # The message has been repeated.
                     pass
-        except BaseException:
-            msg.cancel()
+        except BaseException as exc:
+            await msg.cancel()
             raise
 
     async def _writer(self, val):
@@ -207,7 +208,9 @@ class Server:
                     await self.stream.close()
                     return  # wil be restarted by the reader
                 except BaseException:
-                    await self.stream.close()
+                    if self.stream is not None:
+                        async with anyio.open_cancel_scope(shield=True):
+                            await self.stream.close()
                     raise
 
     async def drop(self):
@@ -240,6 +243,8 @@ class Server:
         for b in list(self._buses.values()):
             await b.delocate()
         self._buses = None
+        for m in self.requests:
+            await m.cancel()
 
     @property
     def all_buses(self):
@@ -280,16 +285,19 @@ class Server:
         old_paths = set()
 
         # step 1: enumerate
-        for d in await self.dir():
-            if d.startswith("bus."):
-                bus = await self.get_bus(d)
-                bus._unseen = 0
-                try:
-                    old_paths.remove(d)
-                except KeyError:
-                    pass
-                buses = await bus._scan_one(polling=polling)
-                old_paths -= buses
+        try:
+            for d in await self.dir():
+                if d.startswith("bus."):
+                    bus = await self.get_bus(d)
+                    bus._unseen = 0
+                    try:
+                        old_paths.remove(d)
+                    except KeyError:
+                        pass
+                    buses = await bus._scan_one(polling=polling)
+                    old_paths -= buses
+        except CancelledError:
+            return
 
         # step 2: deregister buses, if not seen often enough
         for p in old_paths:

@@ -160,8 +160,9 @@ class Message:
     def __repr__(self):
         return "<%s %s>" % (self.__class__.__name__, repr(self.data))
 
-    def cancel(self):
+    async def cancel(self):
         self.cancelled = True
+        await self.event.cancel()
 
     async def write(self, protocol):
         """Send an OWFS message to the other end of the connection.
