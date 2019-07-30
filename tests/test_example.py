@@ -259,11 +259,11 @@ async def test_wrong_bus():
         [
             ServerRegistered,
             ServerConnected,
-            BusAdded_Path("bus-whatever"),
-            #       DeviceAdded("10.345678.90"),
-            #       DeviceLocated("10.345678.90"),
-            #       ServerDisconnected,
-            #       ServerDeregistered,
+            BusAdded_Path("bus.0"),
+            DeviceAdded("10.345678.90"),
+            DeviceLocated("10.345678.90"),
+            ServerDisconnected,
+            ServerDeregistered,
         ]
     )
     with pytest.raises(RuntimeError) as r:
@@ -278,11 +278,7 @@ async def test_slow_server(mock_clock):
         [
             ServerRegistered,
             ServerConnected,
-            ServerDisconnected,
-            ServerConnected,
             BusAdded,
-            ServerDisconnected,
-            ServerConnected,
             DeviceAdded("10.345678.90"),
             DeviceLocated("10.345678.90"),
             ServerDisconnected,
