@@ -6,9 +6,8 @@ Introduction
 
 .. [#] Setting up an `owserver <http://owfs.org/uploads/owserver.html>`_ instance not included.
 
-Zeroth, decide on an asyncio library. Despite its name, ``asyncowfs`` works
-with ``trio``, Python's standard ``asyncio``, or ``curio``. This author
-prefers ``trio``.
+Zeroth, decide on an asyncio library. ``asyncowfs`` works with ``trio``,
+Python's standard ``asyncio``, or ``curio``. This author prefers ``trio``.
 
 First, create an OWFS instance::
 

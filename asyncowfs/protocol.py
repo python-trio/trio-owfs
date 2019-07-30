@@ -89,7 +89,7 @@ class MessageProtocol:
         self.stream = master.stream
         self.is_server = is_server
         self._buf = b''
-        logger.info("START %s %s",self.master_id,self.master)
+        logger.debug("START %s %s",self.master_id,self.master)
 
     async def _read_buf(self, nbytes):
         while len(self._buf) < nbytes:

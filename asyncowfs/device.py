@@ -194,6 +194,7 @@ class SubDir:
         return c
 
 async def setup_accessors(server, cls, typ, *subdir):
+    cls.fields = {}
     for d in await server.dir("structure", typ, *subdir):
         dd = subdir + (d,)
         try:
@@ -239,11 +240,13 @@ async def setup_accessors(server, cls, typ, *subdir):
                     num = False
                 else:
                     num = None
+                v[1] = num
+                cls.fields[d] = v
 
                 if num is None:
                     if v[3] in {'ro', 'rw'}:
                         if hasattr(cls, d):
-                            logger.warning("%s: not overwriting %s" % (cls, d))
+                            logger.debug("%s: not overwriting %s" % (cls, d))
                         else:
                             setattr(cls, d, SimpleValue(dd, v[0]))
                         setattr(cls, 'get_' + d, SimpleGetter(dd, v[0]))
@@ -254,21 +257,21 @@ async def setup_accessors(server, cls, typ, *subdir):
                     dd = subdir + (d,)
                     if v[3] in {'ro', 'rw'}:
                         if hasattr(cls, d):
-                            logger.warning("%s: not overwriting %s" % (cls, d))
+                            logger.debug("%s: not overwriting %s" % (cls, d))
                         else:
                             setattr(cls, d, ArrayValue(dd, v[0], num))
                         setattr(cls, 'get_' + d, ArrayGetter(dd, v[0], num))
                     if v[3] in {'wo', 'rw'}:
                         setattr(cls, 'set_' + d, ArraySetter(dd, v[0], num))
 
-                if v[3] in {'ro', 'rw'}:
-                    if hasattr(cls, d+'_all'):
-                        logger.warning("%s: not overwriting %s" % (cls, d+'_all'))
-                    else:
-                        setattr(cls, d+'_all', MultiValue(dd, v[0]))
-                    setattr(cls, 'get_' + d + '_all', MultiGetter(dd, v[0]))
-                if v[3] in {'wo', 'rw'}:
-                    setattr(cls, 'set_' + d + '_all', MultiSetter(dd, v[0]))
+                    if v[3] in {'ro', 'rw'}:
+                        if hasattr(cls, d+'_all'):
+                            logger.debug("%s: not overwriting %s" % (cls, d+'_all'))
+                        else:
+                            setattr(cls, d+'_all', MultiValue(dd, v[0]))
+                        setattr(cls, 'get_' + d + '_all', MultiGetter(dd, v[0]))
+                    if v[3] in {'wo', 'rw'}:
+                        setattr(cls, 'set_' + d + '_all', MultiSetter(dd, v[0]))
 
 
 
@@ -387,13 +390,13 @@ class Device(SubDir):
         """Read this attribute"""
         if self.bus is None:
             raise NoLocationKnown(self)
-        return await self.bus.attr_get(*((self.id,) + attr))
+        return await self.bus.attr_get(self.id, *attr)
 
     async def attr_set(self, *attr: List[str], value):
         """Write this attribute"""
         if self.bus is None:
             raise NoLocationKnown(self)
-        return await self.bus.attr_set(*((self.id,) + attr), value=value)
+        return await self.bus.attr_set(self.id, *attr, value=value)
 
     def polling_items(self):
         """Enumerate poll variants supported by this device.
