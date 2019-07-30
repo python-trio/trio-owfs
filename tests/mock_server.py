@@ -1,4 +1,5 @@
 import trio
+from anyio.exceptions import ClosedResourceError
 from asyncowfs import OWFS
 from asyncowfs.protocol import MessageProtocol, OWMsg
 from asyncowfs.error import OWFSReplyError, NoEntryError, IsDirError
@@ -124,8 +125,9 @@ async def some_server(tree, options, socket):
                 await rdr.write(-err.err, format_flags)
 
     except (trio.BrokenResourceError, ClosedResourceError):
-        pass
+        await socket.aclose()
     finally:
+        await socket.aclose()
         logger.debug("END Server")
 
 
