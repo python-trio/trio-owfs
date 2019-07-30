@@ -194,6 +194,7 @@ class SubDir:
         return c
 
 async def setup_accessors(server, cls, typ, *subdir):
+    cls.fields = {}
     for d in await server.dir("structure", typ, *subdir):
         dd = subdir + (d,)
         try:
@@ -239,6 +240,8 @@ async def setup_accessors(server, cls, typ, *subdir):
                     num = False
                 else:
                     num = None
+                v[1] = num
+                cls.fields[d] = v
 
                 if num is None:
                     if v[3] in {'ro', 'rw'}:
