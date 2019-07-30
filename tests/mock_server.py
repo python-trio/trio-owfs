@@ -70,10 +70,9 @@ async def some_server(tree, msgs, options, socket):
             return
         async for command, format_flags, data, offset in rdr:
             try:
-                await _schk(each_slow)
                 if _chk(each_busy):
                     await rdr.write(0, format_flags, 0, data=None)
-                    continue
+                await _schk(each_slow)
                 if msgs:
                     try:
                         m = next(msgs)
