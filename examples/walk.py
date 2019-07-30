@@ -16,7 +16,6 @@ python3 walk.py -d 05.67C6697351FF.BF
 from __future__ import print_function
 
 import sys
-import trio
 
 import collections
 

@@ -9,11 +9,10 @@ python3 set.py 10.67C6697351FF.BF temphigh 50
 from __future__ import print_function
 
 import sys
-import trio
 
 import collections
 
-import trio_click as click
+import asyncclick as click
 from asyncowfs import OWFS
 
 import logging
@@ -21,15 +20,14 @@ logger = logging.getLogger('examples.walk')
 
 __all__ = ['main']
 
-async def mon(ow, *, task_status=trio.TASK_STATUS_IGNORED):
+async def mon(ow):
     async with ow.events as events:
-        task_status.started()
         async for msg in events:
             logger.info("%s", msg)
 
 @click.command()
-@click.option('--host', default='localhost', help='host running owserver')
-@click.option('--port', default=4304, type=int, help='owserver port')
+@click.option('--host', '-h', default='localhost', help='host running owserver')
+@click.option('--port', '-p', default=4304, type=int, help='owserver port')
 @click.option('--debug', '-D', is_flag=True, help='Show debug information')
 @click.argument('id')
 @click.argument('attr')
