@@ -264,14 +264,14 @@ async def setup_accessors(server, cls, typ, *subdir):
                     if v[3] in {'wo', 'rw'}:
                         setattr(cls, 'set_' + d, ArraySetter(dd, v[0], num))
 
-                if v[3] in {'ro', 'rw'}:
-                    if hasattr(cls, d+'_all'):
-                        logger.debug("%s: not overwriting %s" % (cls, d+'_all'))
-                    else:
-                        setattr(cls, d+'_all', MultiValue(dd, v[0]))
-                    setattr(cls, 'get_' + d + '_all', MultiGetter(dd, v[0]))
-                if v[3] in {'wo', 'rw'}:
-                    setattr(cls, 'set_' + d + '_all', MultiSetter(dd, v[0]))
+                    if v[3] in {'ro', 'rw'}:
+                        if hasattr(cls, d+'_all'):
+                            logger.debug("%s: not overwriting %s" % (cls, d+'_all'))
+                        else:
+                            setattr(cls, d+'_all', MultiValue(dd, v[0]))
+                        setattr(cls, 'get_' + d + '_all', MultiGetter(dd, v[0]))
+                    if v[3] in {'wo', 'rw'}:
+                        setattr(cls, 'set_' + d + '_all', MultiSetter(dd, v[0]))
 
 
 
