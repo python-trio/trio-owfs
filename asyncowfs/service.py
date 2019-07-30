@@ -62,7 +62,7 @@ class Service:
 
     async def add_server(self, host: str, port: int = 4304, polling: Optional[bool] = None,
             scan: Union[float,bool,None] = None, initial_scan: Union[float,bool,None] = None,
-            random: Optional[int] = None, background: bool = False):
+            random: Optional[int] = None):
         """Add this server to the list.
         
         :param polling: if False, don't poll.
@@ -81,7 +81,7 @@ class Service:
         s = Server(self, host, port)
         await self.push_event(ServerRegistered(s))
         try:
-            await s.start(background=background)
+            await s.start()
         except BaseException as exc:
             logger.error("Could not start %s:%s", host,port)
             await self.push_event(ServerDeregistered(s))

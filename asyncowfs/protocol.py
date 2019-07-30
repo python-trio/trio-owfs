@@ -6,6 +6,7 @@ import attr
 import struct
 from .util import ValueEvent
 from .error import _errors, GenericOWFSReplyError
+from anyio.exceptions import IncompleteRead,ClosedResourceError
 
 import logging
 logger = logging.getLogger(__name__)
@@ -95,7 +96,7 @@ class MessageProtocol:
         while len(self._buf) < nbytes:
             more = await self.stream.receive_some(4096)
             if not more:
-                raise StopAsyncIteration
+                raise ClosedResourceError
             self._buf += more
         res = self._buf[:nbytes]
         self._buf = self._buf[nbytes:]
@@ -145,7 +146,7 @@ class MessageProtocol:
                 struct.pack("!6i", 0, len(data), typ, flags, rlen, offset) + data
             )
 
-
+_id = 0
 class Message:
     timeout = 0.5
     cancelled = False
@@ -156,9 +157,12 @@ class Message:
         self.data = data
         self.rlen = rlen
         self.event = ValueEvent()
+        global _id
+        _id += 1
+        self._id = _id
 
     def __repr__(self):
-        return "<%s %s>" % (self.__class__.__name__, repr(self.data))
+        return "<%s%d %s>" % (self.__class__.__name__, self._id, repr(self.data))
 
     async def cancel(self):
         self.cancelled = True
@@ -177,15 +181,7 @@ class Message:
         flags |= OWdevformat.fdidc << OWdevformat._offset
         flags |= OWpressureformat.mbar << OWpressureformat._offset
 
-        # TODO
-        if self.event is not None and not self.event.is_set():
-            await self.event.set_error(Retry())
-        self.event = ValueEvent()
-
         await protocol.write(self.typ, flags, self.rlen, self.data)
-
-    def _resubmit(self):
-        self.event = ValueEvent()
 
     async def process_reply(self, res, data, server):
         logger.debug("PROCESS %s %s %s", self, res, data)
@@ -235,7 +231,7 @@ class NOPMsg(Message):
         super().__init__(OWMsg.nop, b'', 0)
 
     def __repr__(self):
-        return "<%s>" % (self.__class__.__name__)
+        return "<%s%d>" % (self.__class__.__name__, self._id)
 
 
 class AttrGetMsg(Message):
@@ -248,7 +244,7 @@ class AttrGetMsg(Message):
         super().__init__(OWMsg.read, _path(self.path), 8192)
 
     def __repr__(self):
-        return "<%s %s>" % (self.__class__.__name__, '/' + '/'.join(self.path))
+        return "<%s%d %s>" % (self.__class__.__name__, self._id, '/' + '/'.join(self.path))
 
 
 class AttrSetMsg(Message):
@@ -266,7 +262,7 @@ class AttrSetMsg(Message):
         super().__init__(OWMsg.write, _path(self.path) + value, len(value))
 
     def __repr__(self):
-        return "<%s %s =%s>" % (self.__class__.__name__, '/' + '/'.join(self.path), self.value)
+        return "<%s%d %s =%s>" % (self.__class__.__name__, self._id, '/' + '/'.join(self.path), self.value)
 
 
 class DirMsg(Message):

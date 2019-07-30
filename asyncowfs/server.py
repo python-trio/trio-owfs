@@ -38,7 +38,10 @@ class Server:
         self._scan_task = None
         self._buses = dict()  # path => bus
         self._scan_lock = anyio.create_lock()
-        self._scan_args = {}
+        self._scan_args = None
+        self._backoff = 2
+        self._current_tg = None
+        self._current_run = None
 
     async def get_bus(self, *path):
         """Return the bus at this path. Allocate new if not existing."""
@@ -55,139 +58,127 @@ class Server:
             self.__class__.__name__, self.host, self.port, "OK" if self.stream else "closed"
         )
 
-    async def _reader(self, val):
-        async with anyio.open_cancel_scope() as scope:
-            await val.set(scope)
-            it = self._msg_proto.__aiter__()
-            while True:
-                try:
-                    async with anyio.fail_after(15):
-                        res, data = await it.__anext__()
-                except ServerBusy as exc:
-                    logger.debug("Server %s busy", self.host)
-                except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError, ClosedResourceError):
-                    await self._reconnect()
-                    it = self._msg_proto.__aiter__()
-                else:
-                    msg = self.requests.popleft()
-                    await msg.process_reply(res, data, self)
-                    if not msg.done():
-                        self.requests.appendleft(msg)
+    async def _reader(self, evt):
+        try:
+            async with anyio.open_cancel_scope() as scope:
+                self._read_task = scope
+                await evt.set()
+                it = self._msg_proto.__aiter__()
+                while True:
+                    try:
+                        async with anyio.fail_after(15):
+                            res, data = await it.__anext__()
+                    except StopIteration:
+                        raise ClosedResourceError from None
+                    except ServerBusy as exc:
+                        logger.debug("Server %s busy", self.host)
+                    else:
+                        msg = self.requests.popleft()
+                        await msg.process_reply(res, data, self)
+                        if not msg.done():
+                            self.requests.appendleft(msg)
+        except ClosedResourceError:
+            if self._current_tg is not None:
+                await self._current_tg.cancel_scope.cancel()
 
-    async def _reconnect(self):
-        await self.service.push_event(ServerDisconnected(self))
-        if self._write_task is not None:
-            await self._write_task.cancel()
-            self._write_task = None
-        if self._scan_task is not None:
-            await self._scan_task.cancel()
-            self._scan_task = None
-        await self.stream.close()
-        self.stream = None
-
-        backoff = 0.2
-
-        while True:
-            try:
+    async def _run_one(self, val: ValueEvent):
+        try:
+            async with anyio.create_task_group() as tg:
+                self._current_tg = tg
                 self.stream = await anyio.connect_tcp(self.host, self.port)
-            except OSError:
-                await anyio.sleep(backoff)
-                if backoff < 10:
-                    backoff *= 1.5
-            except BaseException as exc:
-                logger.exception("Owch")
-            else:
-                self._msg_proto = MessageProtocol(self, is_server=False)
 
-                # re-send messages, but skip those that have been cancelled
-                logger.warning("Server %s restarting", self.host)
-                ml, self.requests = list(self.requests), deque()
-                self._wqueue = anyio.create_queue(100)
-                await self.service.push_event(ServerConnected(self))
-                v_w = ValueEvent()
-                await self.service.nursery.spawn(self._writer, v_w)
-                self._write_task = await v_w.get()
-                for msg in ml:
-                    if not msg.cancelled:
-                        await self._wqueue.put(msg)
-                await self.service.nursery.spawn(partial(self.start_scan,**self._scan_args))
-                return
+                ml, self.requests = deque(self.requests), deque()
+                try:
+                    self._msg_proto = MessageProtocol(self, is_server=False)
 
-    async def start(self, background=None):
+                    e_w = anyio.create_event()
+                    e_r = anyio.create_event()
+                    await tg.spawn(self._writer, e_w)
+                    await tg.spawn(self._reader, e_r)
+                    await e_r.wait()
+                    await e_w.wait()
+
+                    # re-send messages, but skip those that have been cancelled
+                    while ml:
+                        msg = ml.popleft()
+                        if not msg.cancelled:
+                            try:
+                                await self._wqueue.put(msg)
+                            except BaseException:
+                                ml.appendleft(msg)
+
+                except BaseException:
+                    self.requests = ml
+                    raise
+
+                await self.chat(NOPMsg())
+
+                if self._scan_args is not None:
+                    await tg.spawn(partial(self.start_scan, **self._scan_args))
+                if val is not None:
+                    await val.set(None)
+                self._backoff = 0.1
+                pass # wait for tasks
+            pass # exited tasks
+
+        finally:
+            self._current_tg = None
+            if self.stream is not None:
+                async with anyio.open_cancel_scope(shield=True):
+                    await self.stream.close()
+                self.stream = None
+
+
+    async def start(self):
         """Start talking. Returns when the connection is established,
         raises an error if that's not possible.
-
-        TODO: if the connection subsequently drops, it's re-established
-        transparently.
         """
-        if background:
-            await self.service.add_task(self._start)
-            return
-            
-        if self.stream is not None:
-            if background is False:
-                return
-            raise RuntimeError("already open")
-        self.stream = await anyio.connect_tcp(self.host, self.port)
-        self._msg_proto = MessageProtocol(self, is_server=False)
+        val = ValueEvent()
+        await self.service.nursery.spawn(self._run_reconnected, val)
+        await val.get()
         await self.service.push_event(ServerConnected(self))
-        v_w = ValueEvent()
-        v_r = ValueEvent()
-        await self.service.nursery.spawn(self._writer, v_w)
-        await self.service.nursery.spawn(self._reader, v_r)
-        self._write_task = await v_w.get()
-        self._read_task = await v_r.get()
 
+
+    async def _run_reconnected(self, val: ValueEvent):
         try:
-            await self.chat(NOPMsg(), fail=True)
-        except BaseException:
-            await self.aclose()
-            raise
+            async with anyio.open_cancel_scope() as scope:
+                self._current_run = scope
+                while True:
+                    try:
+                        await self._run_one(val)
+                    except anyio.get_cancelled_exc_class():
+                        raise
+                    except (BrokenPipeError, TimeoutError, EnvironmentError, IncompleteRead, ConnectionResetError, ClosedResourceError, StopAsyncIteration) as exc:
+                        if val is not None and not val.is_set():
+                            await val.set_error(exc)
+                            return
+                        logger.error("Disconnected")
+                        val = None
 
-    async def _start(self):
-        # try to start repeatedly
-        dly = 0.2
-        while True:
-            try:
-                await self.start(background=False)
-            except ConnectionRefusedError as exc:
-                logger.warning("Connection to %s:%s failed, will retry",
-                        self.host,self.port)
-            else:
-                await self.start_scan(**self._scan_args)
-                return
-            dly *= 1.5
-            if dly > 10:
-                dly = 10
-            await anyio.sleep(dly)
+                        await anyio.sleep(self._backoff)
+                        if self._backoff < 10:
+                            self._backoff *= 1.5
+                    else:
+                        pass
+        finally:
+            self._current_run = None
 
     async def setup_struct(self, dev):
         await dev.setup_struct(self)
 
-    async def chat(self, msg, fail=False):
-        backoff = 0.1
+    async def chat(self, msg):
         await self._wqueue.put(msg)
         try:
-            while True:
-                try:
-                    res = await msg.get_reply()
-                    return res
-                except ServerBusy:
-                    await anyio.sleep(backoff)
-                    if backoff < 2:
-                        backoff *= 1.5
-                    msg._resubmit()
-                    await self._wqueue.put(msg)
-                except Retry:
-                    # The message has been repeated.
-                    pass
+            res = await msg.get_reply()
+            return res
         except BaseException as exc:
             await msg.cancel()
             raise
 
-    async def _writer(self, val):
+    async def _writer(self, evt):
         async with anyio.open_cancel_scope() as scope:
-            await val.set(scope)
+            self._write_task = scope
+            await evt.set()
             while True:
                 try:
                     async with anyio.fail_after(10):
@@ -196,25 +187,7 @@ class Server:
                     msg = NOPMsg()
 
                 self.requests.append(msg)
-                try:
-                    await msg.write(self._msg_proto)
-                except anyio.get_cancelled_exc_class():
-                    raise
-#                except trio.ClosedResourceError:
-#                    # will get restarted by .reconnect()
-#                    return
-                except EnvironmentError as err:
-                    logger.warning("Writer error: %r", err)
-                    return  # will be noticed by the reader. We hope.
-                except IncompleteRead as err:
-                    logger.info("Write end %r", err)
-                    await self.stream.close()
-                    return  # will be restarted by the reader
-                except BaseException as err:
-                    logger.info("Writer error %r", err)
-                    async with anyio.open_cancel_scope(shield=True):
-                        await self.aclose()
-                    raise
+                await msg.write(self._msg_proto)
 
     async def drop(self):
         """Stop talking and delete yourself"""
@@ -224,27 +197,16 @@ class Server:
             await self.service._del_server(self)
 
     async def aclose(self):
-        if self._scan_task is not None:
-            await self._scan_task.cancel()
-            self._scan_task = None
-        if self._write_task is not None:
-            await self._write_task.cancel()
-            self._write_task = None
-        if self._read_task is not None:
-            await self._read_task.cancel()
-            self._read_task = None
+        if self._current_run is not None:
+            await self._current_run.cancel()
+        if self._current_tg is not None:
+            await self._current_tg.cancel_scope.cancel()
 
-        if self.stream is None:
-            return
+        await self.service.push_event(ServerDisconnected(self))
 
-        try:
-            await self.stream.close()
-        finally:
-            self.stream = None
-            await self.service.push_event(ServerDisconnected(self))
-
-        for b in list(self._buses.values()):
-            await b.delocate()
+        if self._buses is not None:
+            for b in list(self._buses.values()):
+                await b.delocate()
         self._buses = None
         for m in self.requests:
             await m.cancel()
@@ -329,9 +291,7 @@ class Server:
         :param polling: Flag whether to start tasks for periodic polling
             (alarm handling, temperature, …). Defaults to ``True``.
         """
-        self._scan_args = dict(scan=scan,initial_scan=initial_scan,polling=polling,random=random)
-        if self.stream is None:
-            return
+        self._scan_args = dict(scan=scan,initial_scan=False,polling=polling,random=random)
         if not scan and not initial_scan:
             return
         if scan and scan < 1:
@@ -339,8 +299,9 @@ class Server:
         if initial_scan is True:
             await self.scan_now(polling=polling)
             initial_scan = False
+
         if initial_scan or scan:
-            self._scan_task = await self.service.add_task(self._scan, scan, initial_scan, polling, random)
+            self._scan_task = await self._current_tg.spawn(self._scan, scan, initial_scan, polling, random)
 
     async def attr_get(self, *path):
         return await self.chat(AttrGetMsg(*path))
