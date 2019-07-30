@@ -166,8 +166,10 @@ async def test_basic_server():
 
 async def test_basic_structs(mock_clock):
     mock_clock.autojump_threshold = 0.1
-    async with server(tree=basic_tree, options={'slow_every': [0, 1], 'busy_every': [0, 0, 1],
-                                                'close_every': [0, 0, 0, 1]}) as ow:
+    async with server(tree=basic_tree, options={'slow_every': [0, 1], 
+                                                'busy_every': [0, 0, 1],
+                                                'close_every': [0, 0, 0, 1]
+                                                }) as ow:
         await trio.sleep(0)
         dev = await ow.get_device("10.345678.90")
         await ow.ensure_struct(dev)
