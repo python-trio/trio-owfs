@@ -98,6 +98,7 @@ class Server:
                 logger.exception("Owch")
             else:
                 self._msg_proto = MessageProtocol(self, is_server=False)
+
                 # re-send messages, but skip those that have been cancelled
                 logger.warning("Server %s restarting", self.host)
                 ml, self.requests = list(self.requests), deque()
@@ -197,16 +198,20 @@ class Server:
                 self.requests.append(msg)
                 try:
                     await msg.write(self._msg_proto)
+                except anyio.get_cancelled_exc_class():
+                    raise
 #                except trio.ClosedResourceError:
 #                    # will get restarted by .reconnect()
 #                    return
                 except EnvironmentError as err:
-                    logger.warning("Write error: %r", err)
-                    return  # will be noticed by the reader
-                except IncompleteRead:
+                    logger.warning("Writer error: %r", err)
+                    return  # will be noticed by the reader. We hope.
+                except IncompleteRead as err:
+                    logger.info("Write end %r", err)
                     await self.stream.close()
-                    return  # wil be restarted by the reader
-                except BaseException:
+                    return  # will be restarted by the reader
+                except BaseException as err:
+                    logger.info("Writer error %r", err)
                     async with anyio.open_cancel_scope(shield=True):
                         await self.aclose()
                     raise
