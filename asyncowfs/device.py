@@ -461,7 +461,6 @@ class TemperatureDevice(Device):
     family = 0x10
 
     interval_temperature = None
-    interval_alarm = None
 
     async def poll_alarm(self):
         """Turn off alarm condition by adapting the temperature bounds
@@ -501,7 +500,6 @@ class VoltageDevice(Device):
     family = 0x20
 
     interval_voltage = None
-    interval_alarm = None
     alarm_voltage = None
 
     async def poll_alarm(self):
