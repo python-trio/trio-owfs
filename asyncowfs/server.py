@@ -64,7 +64,7 @@ class Server:
                     async with anyio.fail_after(15):
                         res, data = await it.__anext__()
                 except ServerBusy as exc:
-                    logger.info("Server %s busy", self.host)
+                    logger.debug("Server %s busy", self.host)
                 except (StopAsyncIteration, TimeoutError, IncompleteRead, ConnectionResetError, ClosedResourceError):
                     await self._reconnect()
                     it = self._msg_proto.__aiter__()
