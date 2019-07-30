@@ -76,7 +76,7 @@ class Bus:
         except TypeError:
             return None # bus is gone
         except KeyError:
-            bus = Bus(self.server, *(self.path + path))
+            bus = Bus(self.server, *self.path, *path)
             self._buses[path] = bus
             await self.service.push_event(BusAdded(bus))
             return bus
@@ -167,17 +167,17 @@ class Bus:
         del self._devices[dev.id]
 
     def dir(self, *subpath):
-        return self.server.dir(*(self.path+subpath))
+        return self.server.dir(*self.path, *subpath)
 
     async def attr_get(self, *attr):
         """Read this attribute"""
-        return await self.server.attr_get(*(self.path + attr))
+        return await self.server.attr_get(*self.path, *attr)
 
     async def attr_set(self, *attr, value):
         """Write this attribute"""
         if self.server is None:
             raise NoLocationKnown(self)
-        return await self.server.attr_set(*(self.path + attr), value=value)
+        return await self.server.attr_set(*self.path, *attr, value=value)
 
     ### Support for polling and alarm handling
 

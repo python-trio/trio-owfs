@@ -390,13 +390,13 @@ class Device(SubDir):
         """Read this attribute"""
         if self.bus is None:
             raise NoLocationKnown(self)
-        return await self.bus.attr_get(*((self.id,) + attr))
+        return await self.bus.attr_get(self.id, *attr)
 
     async def attr_set(self, *attr: List[str], value):
         """Write this attribute"""
         if self.bus is None:
             raise NoLocationKnown(self)
-        return await self.bus.attr_set(*((self.id,) + attr), value=value)
+        return await self.bus.attr_set(self.id, *attr, value=value)
 
     def polling_items(self):
         """Enumerate poll variants supported by this device.
