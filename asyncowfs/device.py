@@ -589,13 +589,4 @@ class VoltageDevice(Device):
 @register
 class PIODevice(Device):
     family = 0x05
-
-    def polling_items(self):
-        yield from super().polling_items()
-        yield "sense"
-
-    async def poll_sense(self):
-        v = await self.sense
-        import pdb;pdb.set_trace()
-        await self.service.push_event(DeviceValue(self, "sense", v))
-
+    # dumb slave, no special handling
