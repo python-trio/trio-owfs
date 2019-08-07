@@ -223,3 +223,7 @@ class Bus:
         """Read all temperature data"""
         return self._poll_simul("temperature", 1.2)
 
+    def poll_voltage(self):
+        """Read all voltage data"""
+        return self._poll_simul("voltage", 1.2)
+

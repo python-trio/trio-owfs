@@ -279,6 +279,8 @@ class Device(SubDir):
     """Base class for devices.
 
     A device may or may not have a known location.
+
+    Whenever a device is located, poll activity is auto-started.
     """
     _did_setup = False
     
@@ -314,6 +316,8 @@ class Device(SubDir):
         self._unseen = 0
         self._events = []
         self._wait_bus = anyio.create_event()
+        self._poll = {}  # name > poll task scopes
+        self._intervals = {}
 
         return self
 
@@ -371,6 +375,8 @@ class Device(SubDir):
         self.bus = bus
         await self._wait_bus.set()
         await self.service.push_event(DeviceLocated(self))
+        for typ,val in self._intervals.items():
+            await self._set_poll_task(typ,val)
 
     async def wait_bus(self):
         await self._wait_bus.wait()
@@ -384,6 +390,9 @@ class Device(SubDir):
     async def _delocate(self):
         await self.bus._del_device(self)
         self.bus = None
+        for t in self._poll.values():
+            await t.cancel()
+        self._poll = {}
         await self.service.push_event(DeviceNotFound(self))
 
     async def attr_get(self, *attr: List[str]):
@@ -421,13 +430,49 @@ class Device(SubDir):
         The default implementation looks up the "interval_<typ>" attribute
         or returns ``None`` if that doesn't exist.
         """
-        return getattr(self, "interval_"+typ, None)
+        try:
+            return self._intervals[typ]
+        except KeyError:
+            return getattr(self, "interval_"+typ, None)
     
     async def set_polling_interval(self, typ: str, value: Optional[float]):
-        setattr(self, "interval_"+typ, value)
-        if self.bus is not None:
-            await self.bus.update_poll()
+        if value:
+            self._intervals[typ] = value
+        else:
+            self._intervals.pop(typ, None)
 
+        if self.bus is not None:
+            if hasattr(self, "poll_"+typ):
+                await self.bus.update_poll()
+            else:
+                await self._set_poll_task(typ,value)
+
+    async def _set_poll_task(self, typ,value):
+        try:
+            task = self._poll.pop(typ)
+        except KeyError:
+            pass
+        else:
+            await task.cancel()
+        if not value:
+            return
+
+        *p, n = typ.split('.')
+        s = self
+        for pp in p:
+            s = getattr(s, pp)
+        if hasattr(s, "get_"+n):
+            self._poll[typ] = await self.service.add_task(self._poll_task, s,n,typ,value)
+        else:
+            raise RuntimeError("%r: No poll for %s" % (self, typ))
+
+    async def _poll_task(self, s,n,typ,value):
+        await anyio.sleep(value/5)
+        while True:
+            v = await getattr(s,n)
+            await self.service.push_event(DeviceValue(self, typ, v))
+            await anyio.sleep(value)
+    
     async def poll_alarm(self):
         """Tells the device not to trigger an alarm any more.
 
@@ -436,7 +481,7 @@ class Device(SubDir):
         application can re-enable it later, when processing the
         :class:`anyio_owfs.event.DeviceAlarm` event.
         """
-        raise NotImplementedError("<%s> needs 'stop_alarm'" % (self.__class__.__name__,))
+        raise NotImplementedError("<%s> (%02x) needs 'poll_alarm'" % (self.__class__.__name__, self.family))
 
 @register
 class SwitchDevice(Device):
@@ -540,4 +585,17 @@ class VoltageDevice(Device):
     async def poll_voltage(self):
         v = await self.volt_all
         await self.service.push_event(DeviceValue(self, "volt_all", v))
+
+@register
+class PIODevice(Device):
+    family = 0x05
+
+    def polling_items(self):
+        yield from super().polling_items()
+        yield "sense"
+
+    async def poll_sense(self):
+        v = await self.sense
+        import pdb;pdb.set_trace()
+        await self.service.push_event(DeviceValue(self, "sense", v))
 
