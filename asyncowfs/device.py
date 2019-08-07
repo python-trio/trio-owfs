@@ -457,7 +457,7 @@ class Device(SubDir):
         if not value:
             return
 
-        *p, n = typ.split('.')
+        *p, n = typ.split('/')
         s = self
         for pp in p:
             s = getattr(s, pp)
