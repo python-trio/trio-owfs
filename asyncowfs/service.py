@@ -158,6 +158,9 @@ class Service:
         return scope
 
     async def push_event(self, event):
+        """
+        Queue an event.
+        """
         if self._event_queue is not None:
             await self._event_queue.put(event)
 
@@ -165,7 +168,16 @@ class Service:
         self._servers.remove(s)
         await self.push_event(ServerDeregistered(s))
 
-    async def _del_device(self, d):
+    async def delete_device(self, d):
+        """
+        Drop this device.
+
+        This method is never called automatically; it's the caller's
+        responsibility to determine whether a DeviceRemoved event really is
+        fatal.
+        """
+        if d.bus is not None:
+            raise RuntimeError("This device is rpesent on %r" % (d.bus,))
         self._devices.remove(d)
         await self.push_event(DeviceDeleted(d))
 

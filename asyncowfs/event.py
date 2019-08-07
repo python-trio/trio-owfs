@@ -108,6 +108,10 @@ class DeviceLocated(DeviceEvent):
     def path(self):
         return self.device.path
 
+    @property
+    def bus(self):
+        return self.device.bus
+
 
 @attr.s
 class DeviceNotFound(DeviceEvent):
