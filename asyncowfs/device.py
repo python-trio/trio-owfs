@@ -435,8 +435,8 @@ class Device(SubDir):
         except KeyError:
             return getattr(self, "interval_"+typ, None)
     
-    async def set_polling_interval(self, typ: str, value: Optional[float]):
-        if value:
+    async def set_polling_interval(self, typ: str, value: float = 0):
+        if value > 0:
             self._intervals[typ] = value
         else:
             self._intervals.pop(typ, None)
