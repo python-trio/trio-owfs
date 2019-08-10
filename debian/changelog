@@ -1,3 +1,9 @@
+asyncowfs (0.10.2-1) unstable; urgency=medium
+
+  * Merge 0.10.2
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 10 Aug 2019 19:08:29 +0200
+
 asyncowfs (0.10.1-2) unstable; urgency=medium
 
   * Packaging woes
@@ -6,7 +12,7 @@ asyncowfs (0.10.1-2) unstable; urgency=medium
 
 asyncowfs (0.10.1-1) unstable; urgency=medium
 
-  * Merge 0.10.
+  * Merge 0.10.1
 
  -- Matthias Urlichs <matthias@urlichs.de>  Sat, 10 Aug 2019 10:40:15 +0200
 

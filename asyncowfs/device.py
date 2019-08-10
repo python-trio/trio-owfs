@@ -284,13 +284,6 @@ class Device(SubDir):
     """
     _did_setup = False
     
-    def __init__(self, service, id):
-        logger.debug("NewDev %s", id)
-
-    @property
-    def dev(self):
-        return self
-
     def __new__(cls, service, id):
         family_id, code, chksum = split_id(id)
 
@@ -318,7 +311,15 @@ class Device(SubDir):
         self._wait_bus = anyio.create_event()
         self._poll = {}  # name > poll task scopes
         self._intervals = {}
+        self._task_lock = anyio.create_lock()
 
+        return self
+
+    def __init__(self, service, id):
+        logger.debug("NewDev %s", id)
+
+    @property
+    def dev(self):
         return self
 
     def queue_event(self, evt):
@@ -448,23 +449,24 @@ class Device(SubDir):
                 await self._set_poll_task(typ,value)
 
     async def _set_poll_task(self, typ,value):
-        try:
-            task = self._poll.pop(typ)
-        except KeyError:
-            pass
-        else:
-            await task.cancel()
-        if not value:
-            return
+        async with self._task_lock:
+            try:
+                task = self._poll.pop(typ)
+            except KeyError:
+                pass
+            else:
+                await task.cancel()
+            if not value:
+                return
 
-        *p, n = typ.split('/')
-        s = self
-        for pp in p:
-            s = getattr(s, pp)
-        if hasattr(s, "get_"+n):
-            self._poll[typ] = await self.service.add_task(self._poll_task, s,n,typ,value)
-        else:
-            raise RuntimeError("%r: No poll for %s" % (self, typ))
+            *p, n = typ.split('/')
+            s = self
+            for pp in p:
+                s = getattr(s, pp)
+            if hasattr(s, "get_"+n):
+                self._poll[typ] = await self.service.add_task(self._poll_task, s,n,typ,value)
+            else:
+                raise RuntimeError("%r: No poll for %s" % (self, typ))
 
     async def _poll_task(self, s,n,typ,value):
         await anyio.sleep(value/5)
