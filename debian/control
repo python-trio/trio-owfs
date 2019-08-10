@@ -8,9 +8,11 @@ Build-Depends: dh-python, python3-setuptools, python3-all, debhelper (>= 9),
 Standards-Version: 3.9.6
 Homepage: https://github.com/smurfix/asyncowfs
 
-Package: python3-trio-owfs
+Package: python3-asyncowfs
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends}
+Replaces: python3-trio-owfs
+Conflicts: python3-trio-owfs
 Description: Async access to 1wire (asyncio,trio,curio)
  This library allows you to access 1wire buses with Python, using any
  async library (trio, asyncio, curio).
