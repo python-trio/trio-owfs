@@ -284,13 +284,6 @@ class Device(SubDir):
     """
     _did_setup = False
     
-    def __init__(self, service, id):
-        logger.debug("NewDev %s", id)
-
-    @property
-    def dev(self):
-        return self
-
     def __new__(cls, service, id):
         family_id, code, chksum = split_id(id)
 
@@ -319,6 +312,13 @@ class Device(SubDir):
         self._poll = {}  # name > poll task scopes
         self._intervals = {}
 
+        return self
+
+    def __init__(self, service, id):
+        logger.debug("NewDev %s", id)
+
+    @property
+    def dev(self):
         return self
 
     def queue_event(self, evt):
