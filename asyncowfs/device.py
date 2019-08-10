@@ -435,8 +435,8 @@ class Device(SubDir):
         except KeyError:
             return getattr(self, "interval_"+typ, None)
     
-    async def set_polling_interval(self, typ: str, value: Optional[float]):
-        if value:
+    async def set_polling_interval(self, typ: str, value: float = 0):
+        if value > 0:
             self._intervals[typ] = value
         else:
             self._intervals.pop(typ, None)
@@ -457,7 +457,7 @@ class Device(SubDir):
         if not value:
             return
 
-        *p, n = typ.split('.')
+        *p, n = typ.split('/')
         s = self
         for pp in p:
             s = getattr(s, pp)
@@ -589,13 +589,4 @@ class VoltageDevice(Device):
 @register
 class PIODevice(Device):
     family = 0x05
-
-    def polling_items(self):
-        yield from super().polling_items()
-        yield "sense"
-
-    async def poll_sense(self):
-        v = await self.sense
-        import pdb;pdb.set_trace()
-        await self.service.push_event(DeviceValue(self, "sense", v))
-
+    # dumb slave, no special handling
