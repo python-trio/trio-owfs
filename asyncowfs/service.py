@@ -62,7 +62,7 @@ class Service:
 
     async def add_server(self, host: str, port: int = 4304, polling: Optional[bool] = None,
             scan: Union[float,bool,None] = None, initial_scan: Union[float,bool,None] = None,
-            random: Optional[int] = None):
+            random: Optional[int] = None, name:str = None):
         """Add this server to the list.
         
         :param polling: if False, don't poll.
@@ -77,8 +77,10 @@ class Service:
             polling = self._polling
         if random is None:
             random = self._random
+        if name is None:
+            name = host
 
-        s = Server(self, host, port)
+        s = Server(self, host, port, name=name)
         await self.push_event(ServerRegistered(s))
         try:
             await s.start()
