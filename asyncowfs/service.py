@@ -32,7 +32,7 @@ class Service:
 
             async with OWFS() as ow:
                 await ow.add_task(rdr, ow)
-                s = await ow.add_server("localhost",4304")
+                s = await ow.add_server("localhost",4304)
 
         :param scan: time between directory scanning.
             None: do not scan repeatedly
