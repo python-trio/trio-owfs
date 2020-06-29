@@ -25,10 +25,11 @@ class Server:
         Encapsulate one server connection.
     """
 
-    def __init__(self, service, host="localhost", port=4304):
+    def __init__(self, service, host="localhost", port=4304, name=None):
         self.service = service
         self.host = host
         self.port = port
+        self.name = name or host
         self.stream = None
         self._msg_proto = None
         self.requests = deque()
