@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-ifneq($(wildcard /usr/share/sourcemgr/make/py),)
+ifneq ($(wildcard /usr/share/sourcemgr/make/py),)
 include /usr/share/sourcemgr/make/py
 else
 %:
