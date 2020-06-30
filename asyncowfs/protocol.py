@@ -2,18 +2,19 @@
 # http://owfs.org/index.php?page=owserver-message-types
 # and 'enum msg_classification' from module/owlib/src/include/ow_message.h
 
-import attr
 import struct
 from .util import ValueEvent
 from .error import _errors, GenericOWFSReplyError
-from anyio.exceptions import IncompleteRead,ClosedResourceError
+from anyio.exceptions import ClosedResourceError
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
 class OWMsg:
     """Constants for the owserver api message types."""
+
     error = 0
     nop = 1
     read = 2
@@ -68,15 +69,19 @@ class OWpressureformat:
 
 class ServerBusy(Exception):
     """Receiver error when the server signals it's busy"""
+
     pass
 
 
 class Retry(Exception):
     """Sender resubmitted."""
+
     pass
 
 
 master_id = 1
+
+
 class MessageProtocol:
     MAX_LENGTH = 9999
 
@@ -89,8 +94,8 @@ class MessageProtocol:
 
         self.stream = master.stream
         self.is_server = is_server
-        self._buf = b''
-        logger.debug("START %s %s",self.master_id,self.master)
+        self._buf = b""
+        logger.debug("START %s %s", self.master_id, self.master)
 
     async def _read_buf(self, nbytes):
         while len(self._buf) < nbytes:
@@ -107,7 +112,7 @@ class MessageProtocol:
 
     async def __anext__(self):
         hdr = await self._read_buf(24)
-        version, payload_len, ret_value, format_flags, data_len, offset = struct.unpack('!6i', hdr)
+        version, payload_len, ret_value, format_flags, data_len, offset = struct.unpack("!6i", hdr)
         if offset & 0x8000:
             offset = 0
         if version != 0:
@@ -120,9 +125,16 @@ class MessageProtocol:
             data_len = 0
         data = await self._read_buf(payload_len)
         logger.debug(
-            "OW%s recv%s %x %x %x %x %x %x %s", self.master_id, "S"
-            if self.is_server else "", version, payload_len,
-            ret_value, format_flags, data_len, offset, repr(data)
+            "OW%s recv%s %x %x %x %x %x %x %s",
+            self.master_id,
+            "S" if self.is_server else "",
+            version,
+            payload_len,
+            ret_value,
+            format_flags,
+            data_len,
+            offset,
+            repr(data),
         )
         if self.is_server:
             return ret_value, format_flags, data, data_len
@@ -130,29 +142,47 @@ class MessageProtocol:
             data = data[:data_len]
             return ret_value, data
 
-    async def write(self, typ, flags, rlen=0, data=b'', offset=0):
+    async def write(self, typ, flags, rlen=0, data=b"", offset=0):
         if data is None:
             logger.debug(
-                "OW%s send%s %x %x %x %x %x %x -", self.master_id, "S"
-                if self.is_server else "", 0, -1, typ, flags, rlen, offset
+                "OW%s send%s %x %x %x %x %x %x -",
+                self.master_id,
+                "S" if self.is_server else "",
+                0,
+                -1,
+                typ,
+                flags,
+                rlen,
+                offset,
             )
             await self.stream.send_all(struct.pack("!6i", 0, -1, typ, flags, rlen, offset))
         else:
             logger.debug(
-                "OW%s send%s %x %x %x %x %x %x %s", self.master_id, "S"
-                if self.is_server else "", 0, len(data), typ, flags, rlen, offset, repr(data)
+                "OW%s send%s %x %x %x %x %x %x %s",
+                self.master_id,
+                "S" if self.is_server else "",
+                0,
+                len(data),
+                typ,
+                flags,
+                rlen,
+                offset,
+                repr(data),
             )
             await self.stream.send_all(
                 struct.pack("!6i", 0, len(data), typ, flags, rlen, offset) + data
             )
 
+
 _id = 0
+
+
 class Message:
     timeout = 0.5
     cancelled = False
 
     def __init__(self, typ, data, rlen):
-        #self.persist = persist
+        # self.persist = persist
         self.typ = typ
         self.data = data
         self.rlen = rlen
@@ -222,13 +252,13 @@ class Message:
 
 def _path(path):
     """Helper to build an OWFS path from a list"""
-    path = '/' + '/'.join(str(x) for x in path)
-    return path.encode('utf-8') + b'\0'
+    path = "/" + "/".join(str(x) for x in path)
+    return path.encode("utf-8") + b"\0"
 
 
 class NOPMsg(Message):
     def __init__(self):
-        super().__init__(OWMsg.nop, b'', 0)
+        super().__init__(OWMsg.nop, b"", 0)
 
     def __repr__(self):
         return "<%s%d>" % (self.__class__.__name__, self._id)
@@ -236,6 +266,7 @@ class NOPMsg(Message):
 
 class AttrGetMsg(Message):
     """read an OWFS value"""
+
     timeout = 2
 
     def __init__(self, *path):
@@ -244,11 +275,12 @@ class AttrGetMsg(Message):
         super().__init__(OWMsg.read, _path(self.path), 8192)
 
     def __repr__(self):
-        return "<%s%d %s>" % (self.__class__.__name__, self._id, '/' + '/'.join(self.path))
+        return "<%s%d %s>" % (self.__class__.__name__, self._id, "/" + "/".join(self.path),)
 
 
 class AttrSetMsg(Message):
     """write an OWFS value"""
+
     timeout = 1
 
     def __init__(self, *path, value):
@@ -256,17 +288,23 @@ class AttrSetMsg(Message):
         self.path = path
         self.value = value
         if isinstance(value, bool):
-            value = b'1' if value else b'0'
+            value = b"1" if value else b"0"
         elif not isinstance(value, bytes):
             value = str(value).encode("utf-8")
         super().__init__(OWMsg.write, _path(self.path) + value, len(value))
 
     def __repr__(self):
-        return "<%s%d %s =%s>" % (self.__class__.__name__, self._id, '/' + '/'.join(self.path), self.value)
+        return "<%s%d %s =%s>" % (
+            self.__class__.__name__,
+            self._id,
+            "/" + "/".join(self.path),
+            self.value,
+        )
 
 
 class DirMsg(Message):
     """Read an owfs directory"""
+
     timeout = 10
 
     def __init__(self, path):
@@ -275,14 +313,14 @@ class DirMsg(Message):
         super().__init__(OWMsg.dirall, p, len(p) - 1)
 
     def _process(self, data):
-        if data == b'':
+        if data == b"":
             return []
         res = []
         for entry in data.split(b","):
-            assert b'\0' not in entry
+            assert b"\0" not in entry
             entry = entry.decode("utf-8")
-            s = entry.rfind('/')
+            s = entry.rfind("/")
             if s > -1:
-                entry = entry[s + 1:]
+                entry = entry[s + 1 :]
             res.append(entry)
         return res

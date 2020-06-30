@@ -1,3 +1,9 @@
+asyncowfs (0.11.1-1) unstable; urgency=medium
+
+  * Merge
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 30 Jun 2020 09:02:59 +0200
+
 asyncowfs (0.11.0-1) unstable; urgency=medium
 
   * Merge

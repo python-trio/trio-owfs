@@ -2,12 +2,13 @@
 
 import anyio
 from functools import partial
+
 try:
     from contextlib import asynccontextmanager
 except ImportError:
     from async_generator import asynccontextmanager
 
-from typing import Optional,Union
+from typing import Optional, Union
 
 from .server import Server
 from .device import Device
@@ -16,6 +17,7 @@ from .event import DeviceAdded, DeviceDeleted
 from .util import ValueEvent
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["OWFS"]
@@ -48,7 +50,15 @@ class Service:
             Default: True
         """
 
-    def __init__(self, nursery, scan: Union[float,None] = None, initial_scan: Union[float,bool] = True, load_structs: bool = True, polling: bool = True, random: int = 0):
+    def __init__(
+        self,
+        nursery,
+        scan: Union[float, None] = None,
+        initial_scan: Union[float, bool] = True,
+        load_structs: bool = True,
+        polling: bool = True,
+        random: int = 0,
+    ):
         self.nursery = nursery
         self._servers = set()  # typ.MutableSet[Server]  # Server
         self._devices = dict()  # ID => Device
@@ -60,11 +70,18 @@ class Service:
         self._polling = polling
         self._load_structs = load_structs
 
-    async def add_server(self, host: str, port: int = 4304, polling: Optional[bool] = None,
-            scan: Union[float,bool,None] = None, initial_scan: Union[float,bool,None] = None,
-            random: Optional[int] = None, name:str = None):
+    async def add_server(
+        self,
+        host: str,
+        port: int = 4304,
+        polling: Optional[bool] = None,
+        scan: Union[float, bool, None] = None,
+        initial_scan: Union[float, bool, None] = None,
+        random: Optional[int] = None,
+        name: str = None,
+    ):
         """Add this server to the list.
-        
+
         :param polling: if False, don't poll.
         :param scan: Override ``self._scan`` for this server.
         :param initial_scan: Override ``self._initial_scan`` for this server.
@@ -84,8 +101,8 @@ class Service:
         await self.push_event(ServerRegistered(s))
         try:
             await s.start()
-        except BaseException as exc:
-            logger.error("Could not start %s:%s", host,port)
+        except BaseException:
+            logger.error("Could not start %s:%s", host, port)
             await self.push_event(ServerDeregistered(s))
             raise
         self._servers.add(s)
@@ -113,7 +130,7 @@ class Service:
                 await cls.setup_struct(s)
                 return
 
-    async def get_device(self, id):
+    async def get_device(self, id):  # pylint: disable=redefined-builtin
         """
         Return the :class:`anyio_owfs.device.Device` instance for the device
         with this ID. Create it if it doesn't exist (this will trigger a
@@ -141,7 +158,7 @@ class Service:
     async def scan_now(self, polling=True):
         """
         Task to scan the whole system.
-        
+
         :param polling: if False, do not add polling tasks
         """
         async with anyio.create_task_group() as n:
@@ -170,7 +187,7 @@ class Service:
         self._servers.remove(s)
         await self.push_event(ServerDeregistered(s))
 
-    async def delete_device(self, d):
+    async def delete_device(self, dev):
         """
         Drop this device.
 
@@ -178,10 +195,11 @@ class Service:
         responsibility to determine whether a DeviceRemoved event really is
         fatal.
         """
-        if d.bus is not None:
-            raise RuntimeError("This device is rpesent on %r" % (d.bus,))
-        self._devices.remove(d)
-        await self.push_event(DeviceDeleted(d))
+        if dev.bus is not None:
+            raise RuntimeError("This device is present on %r" % (dev.bus,))
+        del self._devices[dev.id]
+
+        await self.push_event(DeviceDeleted(dev))
 
     @property
     def devices(self):
@@ -205,24 +223,24 @@ class Service:
     @property
     def events(self):
         class EventWrapper:
-            async def __aenter__(slf):
+            async def __aenter__(slf):  # pylint: disable=no-self-argument
                 assert self._event_queue is None
                 self._event_queue = anyio.create_queue(1000)  # bus events
                 return slf
 
-            async def __aexit__(slf, *tb):
+            async def __aexit__(slf, *tb):  # pylint: disable=no-self-argument
                 if tb[1] is None and not self._event_queue.empty():
                     async with anyio.open_cancel_scope(shield=True):
                         while not self._event_queue.empty():
                             evt = await self._event_queue.get()
                             if evt is not None:
-                                logger.error("Unprocessed: %s",evt)
+                                logger.error("Unprocessed: %s", evt)
                 self._event_queue = None
 
-            def __aiter__(slf):
+            def __aiter__(slf):  # pylint: disable=no-self-argument
                 return slf
 
-            async def __anext__(slf):
+            async def __anext__(slf):  # pylint: disable=no-self-argument
                 if self._event_queue is None:
                     raise StopAsyncIteration
                 res = await self._event_queue.get()

@@ -5,11 +5,12 @@
 import attr
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
 class OWFSReplyError(Exception):
-    pass
+    err: int = None
 
 
 @attr.s(eq=False)
@@ -35,7 +36,7 @@ def _register(cls):
 
 @_register
 @attr.s(eq=False)
-class PermissionError(OWFSReplyError_):
+class AttrPermissionError(OWFSReplyError_):
     err = 13
 
 
@@ -89,7 +90,7 @@ class FaultError(OWFSReplyError_):
 
 @_register
 @attr.s(eq=False)
-class InterruptedError(OWFSReplyError_):
+class CallInterruptedError(OWFSReplyError_):
     err = 4
 
 
@@ -419,7 +420,7 @@ class OutputPathTooLongError(OWFSReplyError_):
 
 @_register
 @attr.s(eq=False)
-class NotADirectoryError(OWFSReplyError_):
+class DevNotADirectoryError(OWFSReplyError_):
     err = 69
 
 
@@ -443,7 +444,7 @@ class SocketError(OWFSReplyError_):
 
 @_register
 @attr.s(eq=False)
-class TimeoutError(OWFSReplyError_):
+class DeviceTimeoutError(OWFSReplyError_):
     err = 73
 
 

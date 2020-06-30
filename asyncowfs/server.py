@@ -3,20 +3,27 @@ Access to an owserver.
 """
 
 import anyio
-from anyio.exceptions import IncompleteRead,ClosedResourceError
+from anyio.exceptions import IncompleteRead, ClosedResourceError
 from collections import deque
-from random import random
 from typing import Union
 from functools import partial
 from concurrent.futures import CancelledError
 
 from .event import ServerConnected, ServerDisconnected
 from .event import BusAdded
-from .protocol import NOPMsg, DirMsg, AttrGetMsg, AttrSetMsg, MessageProtocol, ServerBusy, Retry
+from .protocol import (
+    NOPMsg,
+    DirMsg,
+    AttrGetMsg,
+    AttrSetMsg,
+    MessageProtocol,
+    ServerBusy,
+)
 from .bus import Bus
 from .util import ValueEvent
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,7 +63,10 @@ class Server:
 
     def __repr__(self):
         return "<%s:%s:%d %s>" % (
-            self.__class__.__name__, self.host, self.port, "OK" if self.stream else "closed"
+            self.__class__.__name__,
+            self.host,
+            self.port,
+            "OK" if self.stream else "closed",
         )
 
     async def _reader(self, evt):
@@ -71,7 +81,7 @@ class Server:
                             res, data = await it.__anext__()
                     except StopIteration:
                         raise ClosedResourceError from None
-                    except ServerBusy as exc:
+                    except ServerBusy:
                         logger.debug("Server %s busy", self.host)
                     else:
                         msg = self.requests.popleft()
@@ -119,8 +129,8 @@ class Server:
                 if val is not None:
                     await val.set(None)
                 self._backoff = 0.1
-                pass # wait for tasks
-            pass # exited tasks
+                pass  # wait for tasks
+            pass  # exited tasks
 
         finally:
             self._current_tg = None
@@ -128,7 +138,6 @@ class Server:
                 async with anyio.open_cancel_scope(shield=True):
                     await self.stream.close()
                 self.stream = None
-
 
     async def start(self):
         """Start talking. Returns when the connection is established,
@@ -139,7 +148,6 @@ class Server:
         await val.get()
         await self.service.push_event(ServerConnected(self))
 
-
     async def _run_reconnected(self, val: ValueEvent):
         try:
             async with anyio.open_cancel_scope() as scope:
@@ -149,7 +157,15 @@ class Server:
                         await self._run_one(val)
                     except anyio.get_cancelled_exc_class():
                         raise
-                    except (BrokenPipeError, TimeoutError, EnvironmentError, IncompleteRead, ConnectionResetError, ClosedResourceError, StopAsyncIteration) as exc:
+                    except (
+                        BrokenPipeError,
+                        TimeoutError,
+                        EnvironmentError,
+                        IncompleteRead,
+                        ConnectionResetError,
+                        ClosedResourceError,
+                        StopAsyncIteration,
+                    ) as exc:
                         if val is not None and not val.is_set():
                             await val.set_error(exc)
                             return
@@ -172,7 +188,7 @@ class Server:
         try:
             res = await msg.get_reply()
             return res
-        except BaseException as exc:
+        except BaseException:
             await msg.cancel()
             raise
 
@@ -225,7 +241,7 @@ class Server:
             initial_interval = interval
         # 5% variation, to prevent clustering
         if random:
-            initial_interval *= 1+(random()-0.5)/random
+            initial_interval *= 1 + (random() - 0.5) / random
         await anyio.sleep(initial_interval)
 
         while True:
@@ -235,7 +251,7 @@ class Server:
                 return
             i = interval
             if random:
-                i *= 1+(random()-0.5)/random
+                i *= 1 + (random() - 0.5) / random
             await anyio.sleep(i)
 
     async def scan_now(self, polling=True):
@@ -275,9 +291,13 @@ class Server:
             else:
                 bus._unseen += 1
 
-    async def start_scan(self, scan: Union[float,None] = None,
-            initial_scan: Union[float,bool] = True, polling = True,
-            random: int = 0):
+    async def start_scan(
+        self,
+        scan: Union[float, None] = None,
+        initial_scan: Union[float, bool] = True,
+        polling=True,
+        random: int = 0,
+    ):
         """Scan this server.
 
         :param scan: Flag how often to re-scan the bus.
@@ -292,7 +312,7 @@ class Server:
         :param polling: Flag whether to start tasks for periodic polling
             (alarm handling, temperature, …). Defaults to ``True``.
         """
-        self._scan_args = dict(scan=scan,initial_scan=False,polling=polling,random=random)
+        self._scan_args = dict(scan=scan, initial_scan=False, polling=polling, random=random)
         if not scan and not initial_scan:
             return
         if scan and scan < 1:
@@ -302,7 +322,9 @@ class Server:
             initial_scan = False
 
         if initial_scan or scan:
-            self._scan_task = await self._current_tg.spawn(self._scan, scan, initial_scan, polling, random)
+            self._scan_task = await self._current_tg.spawn(
+                self._scan, scan, initial_scan, polling, random
+            )
 
     async def attr_get(self, *path):
         return await self.chat(AttrGetMsg(*path))

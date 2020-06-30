@@ -10,6 +10,7 @@ from .event import BusAdded, BusDeleted, DeviceAlarm
 from .error import OWFSReplyError
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,13 +28,13 @@ class Bus:
         self._unseen = 0  # didn't find when scanning
         self._tasks = dict()  # polltype => task
         self._intervals = dict()
-        self._random = dict() # varying intervals
+        self._random = dict()  # varying intervals
 
     def __repr__(self):
-        return "<%s:%s %s>" % (self.__class__.__name__, self.server, '/' + '/'.join(self.path))
+        return "<%s:%s %s>" % (self.__class__.__name__, self.server, "/" + "/".join(self.path),)
 
     def __eq__(self, x):
-        x = getattr(x, 'path', x)
+        x = getattr(x, "path", x)
         return self.path == x
 
     def __hash__(self):
@@ -74,7 +75,7 @@ class Bus:
         try:
             return self._buses[path]
         except TypeError:
-            return None # bus is gone
+            return None  # bus is gone
         except KeyError:
             bus = Bus(self.server, *self.path, *path)
             self._buses[path] = bus
@@ -99,7 +100,7 @@ class Bus:
             else:
                 await self.add_device(dev)
             dev._unseen = 0
-            logger.debug("Found %s/%s", '/'.join(self.path), d)
+            logger.debug("Found %s/%s", "/".join(self.path), d)
             for b in dev.buses():
                 buses.add(b)
                 bus = await self.get_bus(*b)
@@ -127,8 +128,8 @@ class Bus:
                 if i is None:
                     continue
                 items.add(k)
-                if isinstance(i, (tuple,list)):
-                    i,j = i
+                if isinstance(i, (tuple, list)):
+                    i, j = i
                 else:
                     j = None
                 oi = intervals.get(k, i)
@@ -154,8 +155,8 @@ class Bus:
             i = self._intervals[name]
             j = self._random.get(name, 0)
             if j:
-                i *= (1+(random()-0.5)/j)
-            logger.info("Delay %s for %f" % (name,i))
+                i *= 1 + (random() - 0.5) / j
+            logger.info("Delay %s for %f", name, i)
             await anyio.sleep(i)
             await self.poll(name)
 
@@ -179,7 +180,7 @@ class Bus:
             raise NoLocationKnown(self)
         return await self.server.attr_set(*self.path, *attr, value=value)
 
-    ### Support for polling and alarm handling
+    # ##### Support for polling and alarm handling ##### #
 
     async def poll(self, name):
         """Run one poll.
@@ -188,15 +189,15 @@ class Bus:
         """
         try:
             try:
-                p = getattr(self, 'poll_'+name)
+                p = getattr(self, "poll_" + name)
             except AttributeError:
                 for d in self.devices:
-                    p = getattr(d, 'poll_'+name, None)
+                    p = getattr(d, "poll_" + name, None)
                     if p is not None:
                         await p()
             else:
                 await p()
-        except OWFSReplyError as exc:
+        except OWFSReplyError:
             logger.exception("Poll '%s' on %s", name, self)
 
     async def poll_alarm(self):
@@ -213,7 +214,7 @@ class Bus:
         await anyio.sleep(delay)
         for dev in self.devices:
             try:
-                p = getattr(dev, "poll_"+name)
+                p = getattr(dev, "poll_" + name)
             except AttributeError:
                 pass
             else:
@@ -226,4 +227,3 @@ class Bus:
     def poll_voltage(self):
         """Read all voltage data"""
         return self._poll_simul("voltage", 1.2)
-

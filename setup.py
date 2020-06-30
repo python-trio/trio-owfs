@@ -5,7 +5,7 @@ This library allows you to access 1wire buses with Python, using any
 async library (trio, asyncio, curio).
 
 This code does *not* try to talk to any 1wire interface by itself; it
-uses TCP port 4304 (by default) to access one or more ``owserver``\ s.
+uses TCP port 4304 (by default) to access one or more ``owserver``\\ s.
 
 Bus enumeration (when starting up, plus periodically in the background
 if desired) is automatic and can be turned off.
@@ -30,15 +30,8 @@ setup(
     author_email="matthias@urlichs.de",
     license="MIT -or- Apache License 2.0",
     packages=find_packages(),
-    install_requires=[
-        "anyio",
-    ],
-    keywords=[
-        "trio",
-        "async",
-        "io",
-        "networking",
-    ],
+    install_requires=["anyio"],
+    keywords=["trio", "async", "io", "networking"],
     python_requires=">=3.5.3",
     classifiers=[
         "Development Status :: 4 - Beta",
