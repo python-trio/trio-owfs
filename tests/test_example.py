@@ -31,7 +31,7 @@ basic_tree = {
                     "foo": {
                         "bar": "42",
                         "baz": {
-                            "qux": "99.875",
+                            "quux": "99.875",
                         },
                         "plugh.A": 1,
                         "plugh.B": 2,
@@ -204,7 +204,7 @@ async def test_more_structs(mock_clock):
         await dev.set_temphigh(98.25)
         assert await dev.temphigh == 98.25
         assert await dev.foo.get_bar() == 42
-        assert await dev.foo.baz.qux == 99.875
+        assert await dev.foo.baz.quux == 99.875
         assert await dev.foo.plugh[0] == 1
         assert await dev.foo.plugh[1] == 2
         assert await dev.foo.plugh[2] == 3
@@ -212,11 +212,11 @@ async def test_more_structs(mock_clock):
         assert await dev.foo.get_plover(1) == 8
         assert await dev.foo.plover[2] == 9
         await dev.foo.set_bar(123)
-        await dev.foo.baz.set_qux(234)
+        await dev.foo.baz.set_quux(234)
         await dev.foo.set_plugh(1, 11)
         await dev.foo.set_plover(1, 111)
         assert await dev.foo.bar == 123
-        assert await dev.foo.baz.qux == 234
+        assert await dev.foo.baz.quux == 234
         assert await dev.foo.plugh[0] == 1
         assert await dev.foo.plugh[1] == 11
         assert await dev.foo.plugh[2] == 3
