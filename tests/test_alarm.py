@@ -9,8 +9,7 @@ from asyncowfs.event import ServerRegistered, ServerConnected, ServerDisconnecte
     BusAdded, BusDeleted, DeviceValue, DeviceAlarm
 from asyncowfs.bus import Bus
 
-from .mock_server import server, EventChecker
-from .structs import structs
+from asyncowfs.mock import server, EventChecker, structs
 
 import logging
 logger = logging.getLogger(__name__)

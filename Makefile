@@ -13,8 +13,8 @@ PACKAGE = asyncowfs
 PYTHON ?= python3
 export PYTHONPATH=$(shell pwd)
 
-PYTEST ?= ${PYTHON} $(shell which pytest-3)
-TEST_OPTIONS ?= -xvvv --full-trace
+PYTEST ?= pytest
+TEST_OPTIONS ?= -xvs
 PYLINT_RC ?= .pylintrc
 
 BUILD_DIR ?= build
@@ -39,8 +39,7 @@ livehtml: docs
 	sphinx-autobuild $(AUTOSPHINXOPTS) $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)
 
 test:
-	$(PYTEST) $(PACKAGE) $(TEST_OPTIONS)
-
+	$(PYTEST) $(PACKAGE) $(TEST_OPTIONS) tests
 
 tagged: 
 	git describe --tags --exact-match
