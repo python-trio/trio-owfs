@@ -27,18 +27,20 @@ Welcome to `Async 1wire <https://github.com/smurfix/asyncowfs>`__!
 This library allows you to access 1wire buses with Python, using any
 async library (trio, asyncio, curio).
 
-This code does *not* try to talk to any 1wire interface by itself; it
+AsyncOWFS does *not* try to talk to any 1wire interface by itself; it
 uses TCP port 4304 (by default) to access one or more ``owserver``\ s.
 
 Bus enumeration (when starting up, plus periodically in the background
 if desired) is automatic and can be turned off.
 
-This code supports background polling, alerts, and simultaneous
+This module supports background polling, alerts, and simultaneous
 conversions. Bus couplers (DS2509) are handled transparently. Accessors to
 device attributes are created from device descriptors, read from
-``owserver`` and augmented by device-specific classes when necessary.
+``owserver``, and augmented by device-specific classes when necessary.
+
+AsyncOWFS includes a test suite, including a mock 1wire server written in
+Python, which you can easily re-use to test your own code. See `distowfs
+<https://github.com/smurfix/distowfs>`__ for an example.
 
 License: Your choice of MIT or Apache License 2.0
 
-The name of this library is (a) historic, (b) its main author strongly
-prefers Trio.

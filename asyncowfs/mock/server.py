@@ -3,6 +3,7 @@ from anyio.exceptions import ClosedResourceError
 from asyncowfs import OWFS
 from asyncowfs.protocol import MessageProtocol, OWMsg
 from asyncowfs.error import OWFSReplyError, NoEntryError, IsDirError
+
 try:
     from contextlib import asynccontextmanager
 except ImportError:
@@ -10,6 +11,7 @@ except ImportError:
 from functools import partial
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +39,36 @@ class FakeMaster:
     def __init__(self, stream):
         self.stream = stream
 
+
 async def some_server(tree, options, socket):
+    """
+    This is a fake 1wire server task.
+
+    ``tree``: the 1wire hierarchy to serve::
+
+        {
+            "bus.0": {
+                "10.345678.90": {
+                    "latesttemp": "12.5",
+                    "temperature": "12.5",
+                    "templow": "10",
+                    "temphigh": "20",
+                }
+            },
+            "structure": asyncowfs.mock.structs,
+        }
+
+
+    ``options``: an object with optional ``busy_every``, ``close_every``
+    and/or ``slow_every`` attributes. These must be an array with an offset
+    and a list of flags. Each call cycles through the array and,
+    respectively, reports to be busy, closes the connection, or delays its
+    answer. This allows you to test various interesting bus conditions.
+    See the ``tests/test_example.pytest_basic_structs`` test for example
+    use.
+
+    ``socket``: the connection to the client.
+    """
     rdr = MessageProtocol(FakeMaster(socket), is_server=True)
     logger.debug("START Server")
 
@@ -57,11 +88,11 @@ async def some_server(tree, options, socket):
                 if command == OWMsg.nop:
                     await rdr.write(0, format_flags, 0)
                 elif command == OWMsg.dirall:
-                    data = data.rstrip(b'\0')
+                    data = data.rstrip(b"\0")
                     subtree = tree
                     path = []
-                    for k in data.split(b'/'):
-                        if k == b'':
+                    for k in data.split(b"/"):
+                        if k == b"":
                             continue
                         path.append(k)
                         k = k.decode("utf-8")
@@ -70,20 +101,20 @@ async def some_server(tree, options, socket):
                         except KeyError:
                             raise NoEntryError(command, data)
                     res = []
-                    for k, v in sorted(subtree.items()):
-                        k = k.encode('utf-8')
+                    for k in sorted(subtree.keys()):
+                        k = k.encode("utf-8")
                         res.append(k)
                     if path:
-                        path = b'/' + b'/'.join(path) + b'/'
+                        path = b"/" + b"/".join(path) + b"/"
                     else:
-                        path = b'/'
-                    data = b','.join(path + k for k in res)
-                    await rdr.write(0, format_flags, len(data), data + b'\0')
+                        path = b"/"
+                    data = b",".join(path + k for k in res)
+                    await rdr.write(0, format_flags, len(data), data + b"\0")
                 elif command == OWMsg.read:
-                    data = data.rstrip(b'\0')
+                    data = data.rstrip(b"\0")
                     res = tree
-                    for k in data.split(b'/'):
-                        if k == b'':
+                    for k in data.split(b"/"):
+                        if k == b"":
                             continue
                         k = k.decode("utf-8")
                         try:
@@ -93,16 +124,16 @@ async def some_server(tree, options, socket):
                     if isinstance(res, dict):
                         raise IsDirError(command, data)
                     if not isinstance(res, bytes):
-                        res = str(res).encode('utf-8')
-                    await rdr.write(0, format_flags, len(res), res + b'\0')
+                        res = str(res).encode("utf-8")
+                    await rdr.write(0, format_flags, len(res), res + b"\0")
                 elif command == OWMsg.write:
                     val = data[-offset:].decode("utf-8")
                     data = data[:-offset]
-                    data = data.rstrip(b'\0')
+                    data = data.rstrip(b"\0")
                     res = tree
                     last = None
-                    for k in data.split(b'/'):
-                        if k == b'':
+                    for k in data.split(b"/"):
+                        if k == b"":
                             continue
                         if last is not None:
                             try:
@@ -117,12 +148,14 @@ async def some_server(tree, options, socket):
                     await rdr.write(0, format_flags, 0)
                 else:
                     raise RuntimeError(
-                        "Unknown command: %d %x %s %d" %
-                        (command, format_flags, repr(data), offset)
+                        "Unknown command: %d %x %s %d"
+                        % (command, format_flags, repr(data), offset)
                     )
             except OWFSReplyError as err:
                 logger.info("Error: %s", err)
-                await rdr.write(-err.err, format_flags)
+                await rdr.write(
+                    -err.err, format_flags  # pylint: disable=invalid-unary-operand-type
+                )
 
     except (trio.BrokenResourceError, ClosedResourceError):
         await socket.aclose()
@@ -132,7 +165,18 @@ async def some_server(tree, options, socket):
 
 
 class EventChecker:
-    def __init__(self, events=[]):
+    """
+    This class is used to verify that whatever happens on the bus is what
+    you'd expect to happen.
+
+    Useful mainly as regression test, to ensure that new versions of your
+    code actually do the requests they're supposed to do / don't generate
+    more bus traffic.
+    """
+
+    pos: int = None
+
+    def __init__(self, events=[]):  # pylint: disable=dangerous-default-value
         self.events = events[:]
 
     def add(self, event):
@@ -148,7 +192,7 @@ class EventChecker:
                     self.check_next(e)
         except RuntimeError:
             raise
-        except Exception as exc:
+        except Exception:
             self.check_last()
         else:
             self.check_last()
@@ -172,20 +216,34 @@ class EventChecker:
 
 
 @asynccontextmanager
-async def server(tree={}, options={}, events=None, polling=False, scan=None, initial_scan=True, **kw):
+async def server(  # pylint: disable=dangerous-default-value  # intentional
+    tree={}, options={}, events=None, polling=False, scan=None, initial_scan=True, **kw
+):
+    """
+    This is a mock 1wire server+client.
+
+    The context manager returns the client.
+
+    ``tree`` and ``opotions`` are used as in `some_server`, ``polling``,
+    ``scan`` and ``initial_scan`` are used to set up the client, other
+    keyword arguments are forwarded to the client constructor.
+    """
     async with OWFS(**kw) as ow:
         async with trio.open_nursery() as n:
             s = None
             try:
-                server = await n.start(
+                srv = await n.start(
                     partial(trio.serve_tcp, host="127.0.0.1"),
-                    partial(some_server, tree, options), 0
+                    partial(some_server, tree, options),
+                    0,
                 )
                 if events is not None:
                     await n.start(events, ow)
-                addr = server[0].socket.getsockname()
+                addr = srv[0].socket.getsockname()
 
-                s = await ow.add_server(*addr, polling=polling, scan=scan, initial_scan=initial_scan)
+                s = await ow.add_server(
+                    *addr, polling=polling, scan=scan, initial_scan=initial_scan
+                )
                 ow.test_server = s
                 yield ow
             finally:
@@ -196,4 +254,3 @@ async def server(tree={}, options={}, events=None, polling=False, scan=None, ini
                     await ow.push_event(None)
                     await trio.sleep(0.1)
                 n.cancel_scope.cancel()
-

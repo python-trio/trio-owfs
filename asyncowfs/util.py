@@ -6,6 +6,7 @@ import outcome
 import anyio
 from concurrent.futures import CancelledError
 
+
 @attr.s
 class ValueEvent:
     """A waitable value useful for inter-task synchronization,
@@ -48,4 +49,3 @@ class ValueEvent:
         """
         await self.event.wait()
         return self.value.unwrap()
-
