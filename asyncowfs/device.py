@@ -565,12 +565,13 @@ class TemperatureDevice(Device):
         yield "alarm"
 
     async def poll_temperature(self):
-        t = await self.latesttemp
+        #t = await self.latesttemp
+        t = await self.temperature
         await self.service.push_event(DeviceValue(self, "temperature", t))
 
-    @property
-    def temperature(self):
-        return self.latesttemp
+#   @property
+#   def temperature(self):
+#       return self.latesttemp
 
 
 @register
