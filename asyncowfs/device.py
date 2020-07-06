@@ -490,8 +490,11 @@ class Device(SubDir):
             s = self
             for pp in p:
                 s = getattr(s, pp)
-            if hasattr(s, "get_" + n):
+            if s.__class__.__name__ == 'IdxObj':
+                self._poll[typ] = await self.service.add_task(self._poll_task_idx, s, int(n), typ, value)
+            elif hasattr(s, "get_" + n):
                 self._poll[typ] = await self.service.add_task(self._poll_task, s, n, typ, value)
+
             else:
                 raise RuntimeError("%r: No poll for %s" % (self, typ))
 
@@ -499,6 +502,13 @@ class Device(SubDir):
         await anyio.sleep(value / 5)
         while True:
             v = await getattr(s, n)
+            await self.service.push_event(DeviceValue(self, typ, v))
+            await anyio.sleep(value)
+
+    async def _poll_task_idx(self, s, n, typ, value):
+        await anyio.sleep(value / 5)
+        while True:
+            v = await s[n]
             await self.service.push_event(DeviceValue(self, typ, v))
             await anyio.sleep(value)
 
