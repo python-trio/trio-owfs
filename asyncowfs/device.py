@@ -490,8 +490,10 @@ class Device(SubDir):
             s = self
             for pp in p:
                 s = getattr(s, pp)
-            if s.__class__.__name__ == 'IdxObj':
-                self._poll[typ] = await self.service.add_task(self._poll_task_idx, s, int(n), typ, value)
+            if s.__class__.__name__ == "IdxObj":
+                self._poll[typ] = await self.service.add_task(
+                    self._poll_task_idx, s, int(n), typ, value
+                )
             elif hasattr(s, "get_" + n):
                 self._poll[typ] = await self.service.add_task(self._poll_task, s, n, typ, value)
 
@@ -575,9 +577,10 @@ class TemperatureDevice(Device):
         yield "alarm"
 
     async def poll_temperature(self):
-        #t = await self.latesttemp
+        # t = await self.latesttemp
         t = await self.temperature
         await self.service.push_event(DeviceValue(self, "temperature", t))
+
 
 #   @property
 #   def temperature(self):
