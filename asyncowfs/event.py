@@ -147,3 +147,11 @@ class DeviceValue(DeviceEvent):
 
     attribute = attr.ib()
     value = attr.ib()
+
+
+@attr.s
+class DeviceException(DeviceEvent):
+    """The device poll did not work."""
+
+    attribute = attr.ib()
+    exception = attr.ib()

@@ -6,7 +6,7 @@ import attr
 import anyio
 from typing import List
 
-from .event import DeviceLocated, DeviceNotFound, DeviceValue
+from .event import DeviceLocated, DeviceNotFound, DeviceValue, DeviceException
 from .error import IsDirError
 
 import logging
@@ -503,15 +503,25 @@ class Device(SubDir):
     async def _poll_task(self, s, n, typ, value):
         await anyio.sleep(value / 5)
         while True:
-            v = await getattr(s, n)
-            await self.service.push_event(DeviceValue(self, typ, v))
+            try:
+                v = await getattr(s, n)
+            except Exception as exc:
+                logger.exception("Reader at %s %s", self, typ)
+                await self.service.push_event(DeviceException(self, typ, exc))
+            else:
+                await self.service.push_event(DeviceValue(self, typ, v))
             await anyio.sleep(value)
 
     async def _poll_task_idx(self, s, n, typ, value):
         await anyio.sleep(value / 5)
         while True:
-            v = await s[n]
-            await self.service.push_event(DeviceValue(self, typ, v))
+            try:
+                v = await s[n]
+            except Exception as exc:
+                logger.exception("Reader at %s %s", self, typ)
+                await self.service.push_event(DeviceException(self, typ, exc))
+            else:
+                await self.service.push_event(DeviceValue(self, typ, v))
             await anyio.sleep(value)
 
     async def poll_alarm(self):
