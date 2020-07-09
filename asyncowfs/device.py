@@ -464,10 +464,10 @@ class Device(SubDir):
             return getattr(self, "interval_" + typ, None)
 
     async def set_polling_interval(self, typ: str, value: float = 0):
-        if isinstance(typ,str):
+        if isinstance(typ, str):
             styp = typ
         else:
-            styp="/".join(str(x) for x in typ)
+            styp = "/".join(str(x) for x in typ)
         if value > 0:
             self._intervals[styp] = value
         else:
@@ -490,14 +490,14 @@ class Device(SubDir):
             if not value:
                 return
 
-            *p, n = typ.split("/") if isinstance(typ,str) else typ
+            *p, n = typ.split("/") if isinstance(typ, str) else typ
             s = self
             for pp in p:
-                if isinstance(pp,int):
+                if isinstance(pp, int):
                     s = s[pp]
                 else:
                     s = getattr(s, pp)
-            if isinstance(n,int) or hasattr(s, "get_" + n):
+            if isinstance(n, int) or hasattr(s, "get_" + n):
                 self._poll[typ] = await self.service.add_task(self._poll_task, s, n, typ, value)
 
             else:
@@ -507,11 +507,13 @@ class Device(SubDir):
         await anyio.sleep(value / 5)
         while True:
             try:
-                if isinstance(n,int):
+                if isinstance(n, int):
                     v = await s[n]
                 else:
                     if n == "bar":
-                        import pdb;pdb.set_trace()
+                        import pdb
+
+                        pdb.set_trace()
                     v = await getattr(s, n)
             except Exception as exc:
                 logger.exception("Reader at %s %s", self, typ)
