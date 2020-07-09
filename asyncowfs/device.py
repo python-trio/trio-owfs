@@ -464,13 +464,17 @@ class Device(SubDir):
             return getattr(self, "interval_" + typ, None)
 
     async def set_polling_interval(self, typ: str, value: float = 0):
-        if value > 0:
-            self._intervals[typ] = value
+        if isinstance(typ,str):
+            styp = typ
         else:
-            self._intervals.pop(typ, None)
+            styp="/".join(str(x) for x in typ)
+        if value > 0:
+            self._intervals[styp] = value
+        else:
+            self._intervals.pop(styp, None)
 
         if self.bus is not None:
-            if hasattr(self, "poll_" + typ):
+            if hasattr(self, "poll_" + styp):
                 await self.bus.update_poll()
             else:
                 await self._set_poll_task(typ, value)
@@ -486,15 +490,14 @@ class Device(SubDir):
             if not value:
                 return
 
-            *p, n = typ.split("/")
+            *p, n = typ.split("/") if isinstance(typ,str) else typ
             s = self
             for pp in p:
-                s = getattr(s, pp)
-            if s.__class__.__name__ == "IdxObj":
-                self._poll[typ] = await self.service.add_task(
-                    self._poll_task_idx, s, int(n), typ, value
-                )
-            elif hasattr(s, "get_" + n):
+                if isinstance(pp,int):
+                    s = s[pp]
+                else:
+                    s = getattr(s, pp)
+            if isinstance(n,int) or hasattr(s, "get_" + n):
                 self._poll[typ] = await self.service.add_task(self._poll_task, s, n, typ, value)
 
             else:
@@ -504,19 +507,12 @@ class Device(SubDir):
         await anyio.sleep(value / 5)
         while True:
             try:
-                v = await getattr(s, n)
-            except Exception as exc:
-                logger.exception("Reader at %s %s", self, typ)
-                await self.service.push_event(DeviceException(self, typ, exc))
-            else:
-                await self.service.push_event(DeviceValue(self, typ, v))
-            await anyio.sleep(value)
-
-    async def _poll_task_idx(self, s, n, typ, value):
-        await anyio.sleep(value / 5)
-        while True:
-            try:
-                v = await s[n]
+                if isinstance(n,int):
+                    v = await s[n]
+                else:
+                    if n == "bar":
+                        import pdb;pdb.set_trace()
+                    v = await getattr(s, n)
             except Exception as exc:
                 logger.exception("Reader at %s %s", self, typ)
                 await self.service.push_event(DeviceException(self, typ, exc))
