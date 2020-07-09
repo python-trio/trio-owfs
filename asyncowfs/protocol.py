@@ -275,7 +275,7 @@ class AttrGetMsg(Message):
         super().__init__(OWMsg.read, _path(self.path), 8192)
 
     def __repr__(self):
-        return "<%s%d %s>" % (self.__class__.__name__, self._id, "/" + "/".join(self.path),)
+        return "<%s%d %s>" % (self.__class__.__name__, self._id, "/" + "/".join(str(x) for x in self.path),)
 
 
 class AttrSetMsg(Message):
@@ -297,7 +297,7 @@ class AttrSetMsg(Message):
         return "<%s%d %s =%s>" % (
             self.__class__.__name__,
             self._id,
-            "/" + "/".join(self.path),
+            "/" + "/".join(str(x) for x in self.path),
             self.value,
         )
 
@@ -324,3 +324,11 @@ class DirMsg(Message):
                 entry = entry[s + 1 :]
             res.append(entry)
         return res
+
+    def __repr__(self):
+        return "<%s%d %s>" % (
+            self.__class__.__name__,
+            self._id,
+            "/" + "/".join(str(x) for x in self.path),
+        )
+
