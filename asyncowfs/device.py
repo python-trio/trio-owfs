@@ -141,6 +141,29 @@ class MultiSetter(_WValue):
         return setter
 
 
+class _IdxObj:
+    def __init__(self, dev, ary):
+        self.dev = dev
+        self.ary = ary
+
+    async def __getitem__(self, idx):
+        if self.ary.num:
+            idx = str(idx)
+        else:
+            idx = chr(ord("A") + idx)
+        p = self.ary.path[:-1] + (self.ary.path[-1] + "." + idx,)
+        res = await self.dev.attr_get(*p)
+        return self.ary.conv(res)
+
+    async def set(self, idx, val):
+        if self.ary.num:
+            idx = str(idx)
+        else:
+            idx = chr(ord("A") + idx)
+        p = self.ary.path[:-1] + (self.ary.path[-1] + "." + idx,)
+        await self.dev.attr_set(*p, value=val)
+
+
 class ArrayValue(_RValue):
     """Accessor for direct array element access"""
 
@@ -149,17 +172,7 @@ class ArrayValue(_RValue):
         self.num = num
 
     def __get__(slf, self, cls):  # pylint: disable=no-self-argument
-        class IdxObj:
-            async def __getitem__(sl, idx):  # pylint: disable=no-self-argument
-                if slf.num:
-                    idx = str(idx)
-                else:
-                    idx = chr(ord("A") + idx)
-                p = slf.path[:-1] + (slf.path[-1] + "." + idx,)
-                res = await self.dev.attr_get(*p)
-                return slf.conv(res)
-
-        return IdxObj()
+        return _IdxObj(self,slf)
 
 
 class ArrayGetter(_RValue):
@@ -424,16 +437,40 @@ class Device(SubDir):
         await self.service.push_event(DeviceNotFound(self))
 
     async def attr_get(self, *attrs: List[str]):
-        """Read this attribute"""
+        """Read this attribute (ignoring device struct)"""
         if self.bus is None:
             raise NoLocationKnown(self)
         return await self.bus.attr_get(self.id, *attrs)
 
     async def attr_set(self, *attrs: List[str], value):
-        """Write this attribute"""
+        """Write this attribute (ignoring device struct)"""
         if self.bus is None:
             raise NoLocationKnown(self)
         return await self.bus.attr_set(self.id, *attrs, value=value)
+
+    async def get(self, *attrs):
+        """Read this attribute (following device struct)"""
+        dev = self
+        for k in attrs:
+            if isinstance(k,int):
+                dev = dev[k]
+            else:
+                dev = getattr(dev, k)
+        return await dev
+
+    async def set(self, *attrs, value):
+        """Write this attribute (following device struct)"""
+        dev = self
+        for k in attrs[:-1]:
+            if isinstance(k,int):
+                dev = dev[k]
+            else:
+                dev = getattr(dev, k)
+        if isinstance(dev, _IdxObj):
+            await dev.set(attrs[-1], value)
+        else:
+            await getattr(dev,"set_"+k)(value)
+
 
     def polling_items(self):
         """Enumerate poll variants supported by this device.
