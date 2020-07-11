@@ -172,7 +172,7 @@ class ArrayValue(_RValue):
         self.num = num
 
     def __get__(slf, self, cls):  # pylint: disable=no-self-argument
-        return _IdxObj(self,slf)
+        return _IdxObj(self.dev,slf)
 
 
 class ArrayGetter(_RValue):
@@ -244,7 +244,7 @@ async def setup_accessors(server, cls, typ, *subdir):
                     self.base = base
 
                 def __repr__(self):
-                    return "<%s %s %s>" % (self.__class__.__name, self.base, self.subdir,)
+                    return "<%s %s %s>" % (self.__class__.__name__, self.base, self.subdir,)
 
                 def __get__(self, obj, cls):
                     if obj is None:
@@ -469,7 +469,7 @@ class Device(SubDir):
         if isinstance(dev, _IdxObj):
             await dev.set(attrs[-1], value)
         else:
-            await getattr(dev,"set_"+k)(value)
+            await getattr(dev,"set_"+attrs[-1])(value)
 
 
     def polling_items(self):
