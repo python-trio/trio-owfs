@@ -510,10 +510,6 @@ class Device(SubDir):
                 if isinstance(n, int):
                     v = await s[n]
                 else:
-                    if n == "bar":
-                        import pdb
-
-                        pdb.set_trace()
                     v = await getattr(s, n)
             except Exception as exc:
                 logger.exception("Reader at %s %s", self, typ)
