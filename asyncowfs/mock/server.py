@@ -193,12 +193,12 @@ class EventChecker:
                 if evt is not None:
                     await evt.set()
                 async for e in ev:
+                    if e is None:
+                        break
                     logger.debug("Event %s", e)
                     self.check_next(e)
         except RuntimeError:
             raise
-        except Exception:
-            self.check_last()
         else:
             self.check_last()
         # don't check on BaseException =Cancellation
@@ -212,8 +212,8 @@ class EventChecker:
         if isinstance(t, type) and isinstance(e, t):
             pass
         elif not (t == e):
-            # raise RuntimeError("Wrong event: want %s but has %s" % (t, e))
-            logger.error("Wrong event: want %s but has %s", t, e)
+            raise RuntimeError("Wrong event: want %s but has %s" % (t, e))
+            # logger.error("Wrong event: want %s but has %s", t, e)
 
     def check_last(self):
         logger.debug("Event END")
@@ -248,6 +248,13 @@ async def server(  # pylint: disable=dangerous-default-value  # intentional
                         await listener.serve(partial(some_server, tree, options))
                     except (anyio.ClosedResourceError, anyio.BrokenResourceError):
                         pass
+                    except trio.MultiError as exc:
+                        exc = exc.filter(lambda x:  None if isinstance(x,trio.Cancelled) else x,exc)
+                        if not isinstance(exc, (anyio.ClosedResourceError, anyio.BrokenResourceError)):
+                            raise
+                    except BaseException as exc:
+                        import pdb;pdb.set_trace()
+                        raise
 
                 if events is not None:
                     evt = anyio.create_event()
