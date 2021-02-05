@@ -260,7 +260,7 @@ async def test_slow_server(mock_clock):
         ]
     )
     async with server(
-        events=e1, tree=basic_tree, options={"slow_every": [0, 0, 15, 0, 0]}
+        events=e1, tree=basic_tree, options={"slow_every": [0, 0, 5, 0, 0]}
     ):  # as ow:
         await trio.sleep(0)
 
