@@ -186,10 +186,12 @@ class EventChecker:
     def add(self, event):
         self.events.push(event)
 
-    async def __call__(self, ow):
+    async def __call__(self, ow, evt=None):
         self.pos = 0
         try:
             async with ow.events as ev:
+                if evt is not None:
+                    await evt.set()
                 async for e in ev:
                     logger.debug("Event %s", e)
                     self.check_next(e)
@@ -248,7 +250,9 @@ async def server(  # pylint: disable=dangerous-default-value  # intentional
                         pass
 
                 if events is not None:
-                    await tg.spawn(events, ow)
+                    evt = anyio.create_event()
+                    await tg.spawn(events, ow, evt)
+                    await evt.wait()
                 addr = listener.extra(anyio.abc.SocketAttribute.raw_socket).getsockname()
                 await tg.spawn(may_close)
 
