@@ -3,7 +3,7 @@ Access to an owserver.
 """
 
 import anyio
-from anyio.exceptions import IncompleteRead, ClosedResourceError
+
 from collections import deque
 from typing import Union
 from functools import partial
@@ -40,7 +40,7 @@ class Server:
         self.stream = None
         self._msg_proto = None
         self.requests = deque()
-        self._wqueue = anyio.create_queue(100)
+        self._wqueue_w, self._wqueue_r = anyio.create_memory_object_stream(100)
         self._read_task = None
         self._write_task = None
         self._scan_task = None
@@ -79,8 +79,8 @@ class Server:
                     try:
                         async with anyio.fail_after(15):
                             res, data = await it.__anext__()
-                    except StopIteration:
-                        raise ClosedResourceError from None
+                    except StopAsyncIteration:
+                        raise anyio.ClosedResourceError from None
                     except ServerBusy:
                         logger.debug("Server %s busy", self.host)
                     else:
@@ -88,7 +88,7 @@ class Server:
                         await msg.process_reply(res, data, self)
                         if not msg.done():
                             self.requests.appendleft(msg)
-        except ClosedResourceError:
+        except anyio.ClosedResourceError:
             if self._current_tg is not None:
                 await self._current_tg.cancel_scope.cancel()
 
@@ -114,7 +114,7 @@ class Server:
                         msg = ml.popleft()
                         if not msg.cancelled:
                             try:
-                                await self._wqueue.put(msg)
+                                await self._wqueue_w.send(msg)
                             except BaseException:
                                 ml.appendleft(msg)
 
@@ -136,7 +136,7 @@ class Server:
             self._current_tg = None
             if self.stream is not None:
                 async with anyio.open_cancel_scope(shield=True):
-                    await self.stream.close()
+                    await self.stream.aclose()
                 self.stream = None
 
     async def start(self):
@@ -161,9 +161,9 @@ class Server:
                         BrokenPipeError,
                         TimeoutError,
                         EnvironmentError,
-                        IncompleteRead,
+                        anyio.IncompleteRead,
                         ConnectionResetError,
-                        ClosedResourceError,
+                        anyio.ClosedResourceError,
                         StopAsyncIteration,
                     ) as exc:
                         if val is not None and not val.is_set():
@@ -184,7 +184,7 @@ class Server:
         await dev.setup_struct(self)
 
     async def chat(self, msg):
-        await self._wqueue.put(msg)
+        await self._wqueue_w.send(msg)
         try:
             res = await msg.get_reply()
             return res
@@ -199,7 +199,7 @@ class Server:
             while True:
                 try:
                     async with anyio.fail_after(10):
-                        msg = await self._wqueue.get()
+                        msg = await self._wqueue_r.receive()
                 except TimeoutError:
                     msg = NOPMsg()
 

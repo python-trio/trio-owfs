@@ -37,7 +37,7 @@ def split_id(id):  # pylint: disable=redefined-builtin
     try:
         a, b, c = (int(x, 16) for x in id.split("."))
     except ValueError:
-        raise NotADevice(id)
+        raise NotADevice(id) from None
     return a, b, c
 
 
@@ -172,7 +172,7 @@ class ArrayValue(_RValue):
         self.num = num
 
     def __get__(slf, self, cls):  # pylint: disable=no-self-argument
-        return _IdxObj(self.dev,slf)
+        return _IdxObj(self.dev, slf)
 
 
 class ArrayGetter(_RValue):
@@ -244,7 +244,11 @@ async def setup_accessors(server, cls, typ, *subdir):
                     self.base = base
 
                 def __repr__(self):
-                    return "<%s %s %s>" % (self.__class__.__name__, self.base, self.subdir,)
+                    return "<%s %s %s>" % (
+                        self.__class__.__name__,
+                        self.base,
+                        self.subdir,
+                    )
 
                 def __get__(self, obj, cls):
                     if obj is None:
@@ -269,7 +273,7 @@ async def setup_accessors(server, cls, typ, *subdir):
                 v[2] = int(v[2])
                 v[4] = int(v[4])
             except ValueError:
-                raise ValueError("broken setup vector", (typ, dd), v)
+                raise ValueError("broken setup vector", (typ, dd), v) from None
             if v[1] == 0:
                 if d.endswith(".0"):
                     num = True
@@ -452,7 +456,7 @@ class Device(SubDir):
         """Read this attribute (following device struct)"""
         dev = self
         for k in attrs:
-            if isinstance(k,int):
+            if isinstance(k, int):
                 dev = dev[k]
             else:
                 dev = getattr(dev, k)
@@ -462,15 +466,14 @@ class Device(SubDir):
         """Write this attribute (following device struct)"""
         dev = self
         for k in attrs[:-1]:
-            if isinstance(k,int):
+            if isinstance(k, int):
                 dev = dev[k]
             else:
                 dev = getattr(dev, k)
         if isinstance(dev, _IdxObj):
             await dev.set(attrs[-1], value)
         else:
-            await getattr(dev,"set_"+attrs[-1])(value)
-
+            await getattr(dev, "set_" + attrs[-1])(value)
 
     def polling_items(self):
         """Enumerate poll variants supported by this device.
@@ -597,8 +600,7 @@ class TemperatureDevice(Device):
     alarm_temperature = None
 
     async def poll_alarm(self):
-        """Turn off alarm condition by adapting the temperature bounds
-        """
+        """Turn off alarm condition by adapting the temperature bounds"""
         self.alarm_temperature = t = await self.latesttemp
         reasons = {"temp": t}
 
@@ -641,8 +643,7 @@ class VoltageDevice(Device):
     alarm_voltage = None
 
     async def poll_alarm(self):
-        """Turn off alarm condition by adapting the voltage bounds
-        """
+        """Turn off alarm condition by adapting the voltage bounds"""
         reasons = {}
         v = await self.voltage_all
         ah = await self.alarm.high_all

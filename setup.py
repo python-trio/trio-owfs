@@ -30,7 +30,7 @@ setup(
     author_email="matthias@urlichs.de",
     license="MIT -or- Apache License 2.0",
     packages=find_packages(),
-    install_requires=["anyio"],
+    install_requires=["anyio >=2"],
     keywords=["trio", "async", "io", "networking"],
     python_requires=">=3.5.3",
     classifiers=[

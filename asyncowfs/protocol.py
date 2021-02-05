@@ -3,9 +3,10 @@
 # and 'enum msg_classification' from module/owlib/src/include/ow_message.h
 
 import struct
+import anyio
+
 from .util import ValueEvent
 from .error import _errors, GenericOWFSReplyError
-from anyio.exceptions import ClosedResourceError
 
 import logging
 
@@ -99,9 +100,10 @@ class MessageProtocol:
 
     async def _read_buf(self, nbytes):
         while len(self._buf) < nbytes:
-            more = await self.stream.receive_some(4096)
-            if not more:
-                raise ClosedResourceError
+            try:
+                more = await self.stream.receive(4096)
+            except (anyio.BrokenResourceError, anyio.ClosedResourceError):
+                raise anyio.EndOfStream from None
             self._buf += more
         res = self._buf[:nbytes]
         self._buf = self._buf[nbytes:]
@@ -111,7 +113,10 @@ class MessageProtocol:
         return self
 
     async def __anext__(self):
-        hdr = await self._read_buf(24)
+        try:
+            hdr = await self._read_buf(24)
+        except anyio.EndOfStream:
+            raise StopAsyncIteration  # pylint: disable=raise-missing-from
         version, payload_len, ret_value, format_flags, data_len, offset = struct.unpack("!6i", hdr)
         if offset & 0x8000:
             offset = 0
@@ -155,7 +160,7 @@ class MessageProtocol:
                 rlen,
                 offset,
             )
-            await self.stream.send_all(struct.pack("!6i", 0, -1, typ, flags, rlen, offset))
+            await self.stream.send(struct.pack("!6i", 0, -1, typ, flags, rlen, offset))
         else:
             logger.debug(
                 "OW%s send%s %x %x %x %x %x %x %s",
@@ -169,7 +174,7 @@ class MessageProtocol:
                 offset,
                 repr(data),
             )
-            await self.stream.send_all(
+            await self.stream.send(
                 struct.pack("!6i", 0, len(data), typ, flags, rlen, offset) + data
             )
 
@@ -199,8 +204,7 @@ class Message:
         await self.event.cancel()
 
     async def write(self, protocol):
-        """Send an OWFS message to the other end of the connection.
-        """
+        """Send an OWFS message to the other end of the connection."""
         # Assume a modern server
         flags = 0
         flags |= OWFlag.persist

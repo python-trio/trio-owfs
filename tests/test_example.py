@@ -194,7 +194,8 @@ async def test_more_structs(mock_clock):
         assert await dev.foo.get_plover(2) == 9
 
 
-async def test_coupler_server():
+async def test_coupler_server(mock_clock):
+    mock_clock.autojump_threshold = 0.1
     e1 = EventChecker(  # pylint: disable=unused-variable
         [
             ServerRegistered,

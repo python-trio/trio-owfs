@@ -101,8 +101,8 @@ class Service:
         await self.push_event(ServerRegistered(s))
         try:
             await s.start()
-        except BaseException:
-            logger.error("Could not start %s:%s", host, port)
+        except BaseException as exc:
+            logger.error("Could not start %s:%s %s", host, port, repr(exc))
             await self.push_event(ServerDeregistered(s))
             raise
         self._servers.add(s)
@@ -181,7 +181,7 @@ class Service:
         Queue an event.
         """
         if self._event_queue is not None:
-            await self._event_queue.put(event)
+            await self._event_queue.send(event)
 
     async def _del_server(self, s):
         self._servers.remove(s)
@@ -214,7 +214,7 @@ class Service:
         for s in list(self._servers):
             await s.drop()
         if self._event_queue is not None:
-            await self._event_queue.put(None)
+            await self._event_queue.aclose()
         for t in list(self._tasks):
             await t.cancel()
 
@@ -223,29 +223,33 @@ class Service:
     @property
     def events(self):
         class EventWrapper:
-            async def __aenter__(slf):  # pylint: disable=no-self-argument
+            # pylint: disable=no-self-argument
+            _q_r = None
+
+            async def __aenter__(slf):
                 assert self._event_queue is None
-                self._event_queue = anyio.create_queue(1000)  # bus events
+                self._event_queue, slf._q_r = anyio.create_memory_object_stream(1000)  # bus events
                 return slf
 
-            async def __aexit__(slf, *tb):  # pylint: disable=no-self-argument
-                if tb[1] is None and not self._event_queue.empty():
-                    async with anyio.open_cancel_scope(shield=True):
-                        while not self._event_queue.empty():
-                            evt = await self._event_queue.get()
-                            if evt is not None:
-                                logger.error("Unprocessed: %s", evt)
+            async def __aexit__(slf, *tb):
+                if tb[1] is None:
+                    try:
+                        while True:
+                            async with anyio.fail_after(0.01, shield=True):
+                                evt = await slf._q_r.receive()
+                            logger.error("Unprocessed: %s", evt)
+                    except TimeoutError:
+                        pass
                 self._event_queue = None
 
-            def __aiter__(slf):  # pylint: disable=no-self-argument
+            def __aiter__(slf):
                 return slf
 
-            async def __anext__(slf):  # pylint: disable=no-self-argument
-                if self._event_queue is None:
-                    raise StopAsyncIteration
-                res = await self._event_queue.get()
-                if res is None:
-                    raise StopAsyncIteration
+            async def __anext__(slf):
+                try:
+                    res = await slf._q_r.receive()
+                except anyio.EndOfStream:
+                    raise StopAsyncIteration  # pylint: disable=raise-missing-from
                 return res
 
         return EventWrapper()

@@ -15,8 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class Bus:
-    """Describes one bus.
-    """
+    """Describes one bus."""
 
     def __init__(self, server, *path):
         self.service = server.service
@@ -31,7 +30,11 @@ class Bus:
         self._random = dict()  # varying intervals
 
     def __repr__(self):
-        return "<%s:%s %s>" % (self.__class__.__name__, self.server, "/" + "/".join(self.path),)
+        return "<%s:%s %s>" % (
+            self.__class__.__name__,
+            self.server,
+            "/" + "/".join(self.path),
+        )
 
     def __eq__(self, x):
         x = getattr(x, "path", x)
