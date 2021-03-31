@@ -145,8 +145,8 @@ class Service:
             return dev
 
     async def _add_task(self, val, proc, *args):
-        async with anyio.open_cancel_scope() as scope:
-            await val.set(scope)
+        with anyio.CancelScope() as scope:
+            val.set(scope)
             try:
                 await proc(*args)
             finally:
@@ -163,7 +163,7 @@ class Service:
         """
         async with anyio.create_task_group() as n:
             for s in list(self._servers):
-                await n.spawn(partial(s.scan_now, polling=polling))
+                n.spawn(partial(s.scan_now, polling=polling))
 
     async def add_task(self, proc, *args):
         """
@@ -171,7 +171,7 @@ class Service:
         Alternately, this call returns its cancel scope.
         """
         val = ValueEvent()
-        await self.nursery.spawn(self._add_task, val, proc, *args)
+        self.nursery.spawn(self._add_task, val, proc, *args)
         scope = await val.get()
         self._tasks.add(scope)
         return scope
@@ -216,7 +216,7 @@ class Service:
         if self._event_queue is not None:
             await self._event_queue.aclose()
         for t in list(self._tasks):
-            await t.cancel()
+            t.cancel()
 
     # listen to events
 
@@ -235,7 +235,7 @@ class Service:
                 if tb[1] is None:
                     try:
                         while True:
-                            async with anyio.fail_after(0.01, shield=True):
+                            with anyio.fail_after(0.01, shield=True):
                                 evt = await slf._q_r.receive()
                             logger.error("Unprocessed: %s", evt)
                     except TimeoutError:

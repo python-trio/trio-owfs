@@ -353,10 +353,10 @@ class Device(SubDir):
 
         self._unseen = 0
         self._events = []
-        self._wait_bus = anyio.create_event()
+        self._wait_bus = anyio.Event()
         self._poll = {}  # name > poll task scopes
         self._intervals = {}
-        self._task_lock = anyio.create_lock()
+        self._task_lock = anyio.Lock()
 
         return self
 
@@ -418,7 +418,7 @@ class Device(SubDir):
         if self.bus is bus:
             return
         self.bus = bus
-        await self._wait_bus.set()
+        self._wait_bus.set()
         await self.service.push_event(DeviceLocated(self))
         for typ, val in self._intervals.items():
             await self._set_poll_task(typ, val)
@@ -429,7 +429,7 @@ class Device(SubDir):
     async def delocate(self, bus):
         """The device is no longer located here."""
         if self.bus is bus:
-            self._wait_bus = anyio.create_event()
+            self._wait_bus = anyio.Event()
             await self._delocate()
 
     async def _delocate(self):

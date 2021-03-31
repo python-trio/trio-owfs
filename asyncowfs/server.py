@@ -45,7 +45,7 @@ class Server:
         self._write_task = None
         self._scan_task = None
         self._buses = dict()  # path => bus
-        self._scan_lock = anyio.create_lock()
+        self._scan_lock = anyio.Lock()
         self._scan_args = None
         self._backoff = 2
         self._current_tg = None
@@ -71,13 +71,13 @@ class Server:
 
     async def _reader(self, evt):
         try:
-            async with anyio.open_cancel_scope() as scope:
+            with anyio.CancelScope() as scope:
                 self._read_task = scope
-                await evt.set()
+                evt.set()
                 it = self._msg_proto.__aiter__()
                 while True:
                     try:
-                        async with anyio.fail_after(15):
+                        with anyio.fail_after(15):
                             res, data = await it.__anext__()
                     except StopAsyncIteration:
                         raise anyio.ClosedResourceError from None
@@ -90,7 +90,7 @@ class Server:
                             self.requests.appendleft(msg)
         except anyio.ClosedResourceError:
             if self._current_tg is not None:
-                await self._current_tg.cancel_scope.cancel()
+                self._current_tg.cancel_scope.cancel()
 
     async def _run_one(self, val: ValueEvent):
         try:
@@ -102,10 +102,10 @@ class Server:
                 try:
                     self._msg_proto = MessageProtocol(self, is_server=False)
 
-                    e_w = anyio.create_event()
-                    e_r = anyio.create_event()
-                    await tg.spawn(self._writer, e_w)
-                    await tg.spawn(self._reader, e_r)
+                    e_w = anyio.Event()
+                    e_r = anyio.Event()
+                    tg.spawn(self._writer, e_w)
+                    tg.spawn(self._reader, e_r)
                     await e_r.wait()
                     await e_w.wait()
 
@@ -125,9 +125,9 @@ class Server:
                 await self.chat(NOPMsg())
 
                 if self._scan_args is not None:
-                    await tg.spawn(partial(self.start_scan, **self._scan_args))
+                    tg.spawn(partial(self.start_scan, **self._scan_args))
                 if val is not None:
-                    await val.set(None)
+                    val.set(None)
                 self._backoff = 0.1
                 pass  # wait for tasks
             pass  # exited tasks
@@ -135,7 +135,7 @@ class Server:
         finally:
             self._current_tg = None
             if self.stream is not None:
-                async with anyio.open_cancel_scope(shield=True):
+                with anyio.CancelScope(shield=True):
                     await self.stream.aclose()
                 self.stream = None
 
@@ -144,13 +144,13 @@ class Server:
         raises an error if that's not possible.
         """
         val = ValueEvent()
-        await self.service.nursery.spawn(self._run_reconnected, val)
+        self.service.nursery.spawn(self._run_reconnected, val)
         await val.get()
         await self.service.push_event(ServerConnected(self))
 
     async def _run_reconnected(self, val: ValueEvent):
         try:
-            async with anyio.open_cancel_scope() as scope:
+            with anyio.CancelScope() as scope:
                 self._current_run = scope
                 while True:
                     try:
@@ -167,7 +167,7 @@ class Server:
                         StopAsyncIteration,
                     ) as exc:
                         if val is not None and not val.is_set():
-                            await val.set_error(exc)
+                            val.set_error(exc)
                             return
                         logger.error("Disconnected")
                         val = None
@@ -189,16 +189,16 @@ class Server:
             res = await msg.get_reply()
             return res
         except BaseException:
-            await msg.cancel()
+            msg.cancel()
             raise
 
     async def _writer(self, evt):
-        async with anyio.open_cancel_scope() as scope:
+        with anyio.CancelScope() as scope:
             self._write_task = scope
-            await evt.set()
+            evt.set()
             while True:
                 try:
-                    async with anyio.fail_after(10):
+                    with anyio.fail_after(10):
                         msg = await self._wqueue_r.receive()
                 except TimeoutError:
                     msg = NOPMsg()
@@ -215,9 +215,9 @@ class Server:
 
     async def aclose(self):
         if self._current_run is not None:
-            await self._current_run.cancel()
+            self._current_run.cancel()
         if self._current_tg is not None:
-            await self._current_tg.cancel_scope.cancel()
+            self._current_tg.cancel_scope.cancel()
 
         await self.service.push_event(ServerDisconnected(self))
 
@@ -226,7 +226,7 @@ class Server:
                 await b.delocate()
         self._buses = None
         for m in self.requests:
-            await m.cancel()
+            m.cancel()
 
     @property
     def all_buses(self):

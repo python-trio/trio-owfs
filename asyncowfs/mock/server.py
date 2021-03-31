@@ -191,7 +191,7 @@ class EventChecker:
         try:
             async with ow.events as ev:
                 if evt is not None:
-                    await evt.set()
+                    evt.set()
                 async for e in ev:
                     if e is None:
                         break
@@ -257,11 +257,11 @@ async def server(  # pylint: disable=dangerous-default-value  # intentional
                         raise
 
                 if events is not None:
-                    evt = anyio.create_event()
-                    await tg.spawn(events, ow, evt)
+                    evt = anyio.Event()
+                    tg.spawn(events, ow, evt)
                     await evt.wait()
                 addr = listener.extra(anyio.abc.SocketAttribute.raw_socket).getsockname()
-                await tg.spawn(may_close)
+                tg.spawn(may_close)
 
                 s = await ow.add_server(
                     *addr, polling=polling, scan=scan, initial_scan=initial_scan
@@ -271,9 +271,9 @@ async def server(  # pylint: disable=dangerous-default-value  # intentional
             finally:
                 ow.test_server = None
                 await listener.aclose()
-                async with anyio.open_cancel_scope(shield=True):
+                with anyio.CancelScope(shield=True):
                     if s is not None:
                         await s.drop()
                     await ow.push_event(None)
                     await anyio.sleep(0.1)
-                await tg.cancel_scope.cancel()
+                tg.cancel_scope.cancel()

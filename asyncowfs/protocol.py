@@ -199,9 +199,10 @@ class Message:
     def __repr__(self):
         return "<%s%d %s>" % (self.__class__.__name__, self._id, repr(self.data))
 
-    async def cancel(self):
+    def cancel(self):
         self.cancelled = True
-        await self.event.cancel()
+        self.event.cancel()
+        return anyio.DeprecatedAwaitable(self.cancel)
 
     async def write(self, protocol):
         """Send an OWFS message to the other end of the connection."""
@@ -225,16 +226,16 @@ class Message:
                 error = err(res, self, server)
             else:
                 error = err(self, server)
-            await self.event.set_error(error)
+            self.event.set_error(error)
             return
         elif res > 0:
             assert len(data) == res, (data, res)
         data = self._process(data)
         if data is not None:
-            await self.event.set(data)
+            self.event.set(data)
 
     async def process_error(self, exc):
-        await self.event.set_error(exc)
+        self.event.set_error(exc)
 
     def _process(self, data):
         return data
