@@ -223,7 +223,7 @@ class Bus:
             except AttributeError:
                 pass
             else:
-                await p()
+                await p(simul=True)
 
 
     def poll_temperature(self):

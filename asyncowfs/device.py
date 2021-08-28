@@ -619,8 +619,8 @@ class TemperatureDevice(Device):
         yield "temperature"
         yield "alarm"
 
-    async def poll_temperature(self):
-        t = await self.latesttemp
+    async def poll_temperature(self, simul=False):
+        t = await (self.latesttemp if simul else self.temperature)
         if t == 85:
             logger.error("TEMP: got 85 on %r", self)
             return
@@ -679,7 +679,7 @@ class VoltageDevice(Device):
         yield "voltage"
         yield "alarm"
 
-    async def poll_voltage(self):
+    async def poll_voltage(self, simul=False):
         v = await self.volt_all
         await self.service.push_event(DeviceValue(self, "volt_all", v))
 
