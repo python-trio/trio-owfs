@@ -620,7 +620,8 @@ class TemperatureDevice(Device):
         yield "alarm"
 
     async def poll_temperature(self, simul=False):
-        t = await (self.latesttemp if simul else self.temperature)
+        # Bug workaround
+        t = await (self.latesttemp if simul and len(self.bus.path)<=1 else self.temperature)
         if t == 85:
             logger.error("TEMP: got 85 on %r", self)
             return
