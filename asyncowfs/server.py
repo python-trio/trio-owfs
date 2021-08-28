@@ -51,6 +51,8 @@ class Server:
         self._current_tg = None
         self._current_run = None
 
+        self.simul_lock = anyio.Lock()
+
     async def get_bus(self, *path):
         """Return the bus at this path. Allocate new if not existing."""
         try:

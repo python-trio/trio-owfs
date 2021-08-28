@@ -199,7 +199,8 @@ class Bus:
                     if p is not None:
                         await p()
             else:
-                await p()
+                async with self.server.simul_lock:
+                    await p()
         except OWFSReplyError:
             logger.exception("Poll '%s' on %s", name, self)
 
@@ -213,6 +214,7 @@ class Bus:
 
     async def _poll_simul(self, name, delay):
         """Write to a single 'simultaneous' entry"""
+        logger.debug("Simul %s %r", name, self)
         await self.attr_set("simultaneous", name, value=1)
         await anyio.sleep(delay)
         for dev in self.devices:
