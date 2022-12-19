@@ -552,7 +552,7 @@ class Device(SubDir):
                 else:
                     v = await getattr(s, n)
             except Exception as exc:
-                logger.exception("Reader at %s %s", self, typ)
+                logger.error("Reader at %s %s: %r", self, typ, exc)
                 await self.service.push_event(DeviceException(self, typ, exc))
             else:
                 await self.service.push_event(DeviceValue(self, typ, v))
