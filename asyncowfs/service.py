@@ -163,7 +163,7 @@ class Service:
         """
         async with anyio.create_task_group() as n:
             for s in list(self._servers):
-                n.spawn(partial(s.scan_now, polling=polling))
+                n.start_soon(partial(s.scan_now, polling=polling))
 
     async def add_task(self, proc, *args):
         """
@@ -171,7 +171,7 @@ class Service:
         Alternately, this call returns its cancel scope.
         """
         val = ValueEvent()
-        self.nursery.spawn(self._add_task, val, proc, *args)
+        self.nursery.start_soon(self._add_task, val, proc, *args)
         scope = await val.get()
         self._tasks.add(scope)
         return scope

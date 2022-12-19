@@ -258,10 +258,10 @@ async def server(  # pylint: disable=dangerous-default-value  # intentional
 
                 if events is not None:
                     evt = anyio.Event()
-                    tg.spawn(events, ow, evt)
+                    tg.start_soon(events, ow, evt)
                     await evt.wait()
                 addr = listener.extra(anyio.abc.SocketAttribute.raw_socket).getsockname()
-                tg.spawn(may_close)
+                tg.start_soon(may_close)
 
                 s = await ow.add_server(
                     *addr, polling=polling, scan=scan, initial_scan=initial_scan

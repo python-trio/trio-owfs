@@ -106,8 +106,8 @@ class Server:
 
                     e_w = anyio.Event()
                     e_r = anyio.Event()
-                    tg.spawn(self._writer, e_w)
-                    tg.spawn(self._reader, e_r)
+                    tg.start_soon(self._writer, e_w)
+                    tg.start_soon(self._reader, e_r)
                     await e_r.wait()
                     await e_w.wait()
 
@@ -127,7 +127,7 @@ class Server:
                 await self.chat(NOPMsg())
 
                 if self._scan_args is not None:
-                    tg.spawn(partial(self.start_scan, **self._scan_args))
+                    tg.start_soon(partial(self.start_scan, **self._scan_args))
                 if val is not None:
                     val.set(None)
                 self._backoff = 0.1
@@ -146,7 +146,7 @@ class Server:
         raises an error if that's not possible.
         """
         val = ValueEvent()
-        self.service.nursery.spawn(self._run_reconnected, val)
+        self.service.nursery.start_soon(self._run_reconnected, val)
         await val.get()
         await self.service.push_event(ServerConnected(self))
 
@@ -324,7 +324,7 @@ class Server:
             initial_scan = False
 
         if initial_scan or scan:
-            self._scan_task = await self._current_tg.spawn(
+            self._scan_task = await self._current_tg.start_soon(
                 self._scan, scan, initial_scan, polling, random
             )
 
