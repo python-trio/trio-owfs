@@ -2,6 +2,10 @@ import trio
 import pytest
 from copy import deepcopy
 
+from moat.util import ungroup,exc_iter
+
+import anyio
+
 from asyncowfs.error import NoEntryError
 from asyncowfs.event import (
     ServerRegistered,
@@ -77,10 +81,17 @@ async def test_send_idle(mock_clock):
 
 async def test_missing_event():
     e1 = EventChecker([ServerRegistered, ServerConnected, ServerDisconnected])
-    with pytest.raises(RuntimeError) as r:
+    with pytest.raises((RuntimeError,ExceptionGroup)) as r, ungroup:
         async with server(events=e1):  # as ow:
             await trio.sleep(0)
-    assert "Unexpected event " in r.value.args[0]
+
+    for e in exc_iter(r.value):
+        if isinstance(e, RuntimeError):
+            assert "Unexpected event " in e.args[0]
+        elif isinstance(e, anyio.ClosedResourceError):
+            pass
+        else:
+            raise
 
 
 async def test_more_event():
@@ -93,7 +104,7 @@ async def test_more_event():
             ServerDeregistered,
         ]
     )
-    with pytest.raises(RuntimeError) as r:
+    with pytest.raises(RuntimeError) as r, ungroup:
         async with server(events=e1):  # as ow:
             await trio.sleep(0)
     assert "Superfluous event " in r.value.args[0]
@@ -101,10 +112,18 @@ async def test_more_event():
 
 async def test_bad_event():
     e1 = EventChecker([ServerRegistered, ServerConnected, ServerConnected, ServerDeregistered])
-    with pytest.raises(RuntimeError) as r:
+    with pytest.raises((RuntimeError,ExceptionGroup)) as r:
         async with server(events=e1):  # as ow:
             await trio.sleep(0)
-    assert "Wrong event: want " in r.value.args[0]
+    for e in exc_iter(r.value):
+        if isinstance(e, RuntimeError):
+            assert "Wrong event: want " in e.args[0]
+        elif isinstance(e, anyio.ClosedResourceError):
+            pass
+        else:
+            raise
+
+
 
 
 async def test_basic_server():
@@ -238,10 +257,18 @@ async def test_wrong_bus():
             ServerDeregistered,
         ]
     )
-    with pytest.raises(RuntimeError) as r:
+    with pytest.raises((RuntimeError,ExceptionGroup)) as r:
         async with server(events=e1, tree=basic_tree):  # as ow:
             await trio.sleep(0)
-    assert "Wrong event: want " in r.value.args[0]
+    for e in exc_iter(r.value):
+        if isinstance(e, RuntimeError):
+            assert "Wrong event: want " in e.args[0]
+        elif isinstance(e, anyio.ClosedResourceError):
+            pass
+        else:
+            raise
+
+
 
 
 async def test_slow_server(mock_clock):

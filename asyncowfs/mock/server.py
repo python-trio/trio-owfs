@@ -5,6 +5,8 @@ from asyncowfs import OWFS
 from asyncowfs.protocol import MessageProtocol, OWMsg
 from asyncowfs.error import OWFSReplyError, NoEntryError, IsDirError
 
+from moat.util import ungroup
+
 try:
     from contextlib import asynccontextmanager
 except ImportError:
@@ -238,6 +240,7 @@ async def server(  # pylint: disable=dangerous-default-value  # intentional
     async with OWFS(**kw) as ow:
         async with anyio.create_task_group() as tg:
             s = None
+            listener = None
             try:
                 listener = await anyio.create_tcp_listener(
                     local_host="127.0.0.1", local_port=PORT, reuse_port=True
@@ -245,16 +248,10 @@ async def server(  # pylint: disable=dangerous-default-value  # intentional
 
                 async def may_close():
                     try:
-                        await listener.serve(partial(some_server, tree, options))
+                        with ungroup:
+                            await listener.serve(partial(some_server, tree, options))
                     except (anyio.ClosedResourceError, anyio.BrokenResourceError):
                         pass
-                    except trio.MultiError as exc:
-                        exc = exc.filter(lambda x:  None if isinstance(x,trio.Cancelled) else x,exc)
-                        if not isinstance(exc, (anyio.ClosedResourceError, anyio.BrokenResourceError)):
-                            raise
-                    except BaseException as exc:
-                        import pdb;pdb.set_trace()
-                        raise
 
                 if events is not None:
                     evt = anyio.Event()
@@ -270,7 +267,8 @@ async def server(  # pylint: disable=dangerous-default-value  # intentional
                 yield ow
             finally:
                 ow.test_server = None
-                await listener.aclose()
+                if listener is not None:
+                    await listener.aclose()
                 with anyio.CancelScope(shield=True):
                     if s is not None:
                         await s.drop()
