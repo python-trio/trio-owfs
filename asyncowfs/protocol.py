@@ -202,7 +202,6 @@ class Message:
     def cancel(self):
         self.cancelled = True
         self.event.cancel()
-        return anyio.DeprecatedAwaitable(self.cancel)
 
     async def write(self, protocol):
         """Send an OWFS message to the other end of the connection."""

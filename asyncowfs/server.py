@@ -199,14 +199,22 @@ class Server:
             self._write_task = scope
             evt.set()
             while True:
+                msg = None
                 try:
+                    logger.debug("Writer Start %s", self.host)
                     with anyio.fail_after(10):
                         msg = await self._wqueue_r.receive()
+                        logger.debug("Writer send %s", msg)
                 except TimeoutError:
-                    msg = NOPMsg()
+                    if msg is None:
+                        msg = NOPMsg()
+                        logger.debug("Writer TO send %s", msg)
+                    else:
+                        logger.warning("Writer OWCHIE send")
 
                 self.requests.append(msg)
                 await msg.write(self._msg_proto)
+                logger.debug("Writer did %s", msg)
 
     async def drop(self):
         """Stop talking and delete yourself"""

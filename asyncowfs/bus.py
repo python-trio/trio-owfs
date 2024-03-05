@@ -215,7 +215,11 @@ class Bus:
     async def _poll_simul(self, name, delay):
         """Write to a single 'simultaneous' entry"""
         logger.debug("Simul %s %r", name, self)
-        await self.attr_set("simultaneous", name, value=1)
+        try:
+            await self.attr_set("simultaneous", name, value=1)
+        finally:
+            logger.debug("Simul DONE %s %r", name, self)
+
         await anyio.sleep(delay)
         for dev in self.devices:
             try:
