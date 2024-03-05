@@ -144,7 +144,7 @@ class Bus:
         old_items = set(self._tasks.keys()) - items
         for x in old_items:
             j = self._tasks.pop(x)
-            await j.cancel()
+            j.cancel()
 
         self._intervals.update(intervals)
         self._random.update(randoms)

@@ -436,7 +436,7 @@ class Device(SubDir):
         await self.bus._del_device(self)
         self.bus = None
         for t in self._poll.values():
-            await t.cancel()
+            t.cancel()
         self._poll = {}
         await self.service.push_event(DeviceNotFound(self))
 
@@ -526,7 +526,7 @@ class Device(SubDir):
             except KeyError:
                 pass
             else:
-                await task.cancel()
+                task.cancel()
             if not value:
                 return
 
